@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/services/haptic_service.dart';
 import '../../core/services/progress_service.dart';
 import '../../core/services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -33,30 +34,39 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
   }
 
   Future<void> _speakEnglishNormal() async {
+    await HapticService.selection();
     await ProgressService.registerAudioPlay();
     await _ttsService.speakEnglish(widget.word.wordEn);
   }
 
   Future<void> _speakEnglishSlow() async {
+    await HapticService.selection();
     await ProgressService.registerAudioPlay();
     await _ttsService.speakEnglishSlow(widget.word.wordEn);
   }
 
   Future<void> _speakSpanishWord() async {
+    await HapticService.selection();
     await ProgressService.registerAudioPlay();
     await _ttsService.speakSpanish(widget.word.wordEs);
   }
 
   Future<void> _speakExample() async {
+    await HapticService.selection();
     await ProgressService.registerAudioPlay();
 
-    await _ttsService.speakEnglish(widget.word.example);
-
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    await _ttsService.speakSpanish(
-      '${widget.word.wordEn} significa ${widget.word.wordEs}.',
+    // Reproducción bilingüe fluida esperando la finalización real y aplicando
+    // una pausa cognitiva de 300ms sin cortes de audio (WCAG 2.2 AA).
+    await _ttsService.speakBilingual(
+      textEn: widget.word.example,
+      textEs: '${widget.word.wordEn} significa ${widget.word.wordEs}.',
+      pause: const Duration(milliseconds: 300),
     );
+  }
+
+  Future<void> _stopAudio() async {
+    await HapticService.selection();
+    await _ttsService.stop();
   }
 
   Color _categoryColor(String category) {
@@ -118,7 +128,7 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: categoryColor.withOpacity(0.12),
+                          color: categoryColor.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
@@ -181,60 +191,98 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
 
             const SizedBox(height: 22),
 
+            // Encabezado de la sección de controles de audio
             Semantics(
-              button: true,
-              label: 'Escuchar palabra en inglés normal ${word.wordEn}',
-              child: ElevatedButton.icon(
-                onPressed: _speakEnglishNormal,
-                icon: const Icon(Icons.volume_up_rounded),
-                label: Text('Escuchar "${word.wordEn}"'),
+              header: true,
+              label: 'Controles de pronunciación y audio',
+              child: const Text(
+                'Pronunciación',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
 
             const SizedBox(height: 12),
 
-            Semantics(
-              button: true,
-              label: 'Escuchar palabra en inglés lentamente ${word.wordEn}',
-              child: OutlinedButton.icon(
-                onPressed: _speakEnglishSlow,
-                icon: const Icon(Icons.slow_motion_video_rounded),
-                label: const Text('Escuchar en inglés lento'),
-              ),
+            // Agrupación de botones de inglés: velocidad normal y lenta
+            Row(
+              children: [
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    label: 'Escuchar ${word.wordEn} a velocidad normal',
+                    child: ElevatedButton.icon(
+                      onPressed: _speakEnglishNormal,
+                      icon: const Icon(Icons.volume_up_rounded),
+                      label: const Text('Normal'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    label: 'Escuchar ${word.wordEn} a velocidad lenta',
+                    child: OutlinedButton.icon(
+                      onPressed: _speakEnglishSlow,
+                      icon: const Icon(Icons.slow_motion_video_rounded),
+                      label: const Text('Lenta'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
 
             const SizedBox(height: 12),
 
+            // Pronunciación en español
             Semantics(
               button: true,
-              label: 'Escuchar palabra en español ${word.wordEs}',
+              label: 'Escuchar ${word.wordEs} en español',
               child: OutlinedButton.icon(
                 onPressed: _speakSpanishWord,
                 icon: const Icon(Icons.translate_rounded),
-                label: Text('Escuchar "${word.wordEs}"'),
+                label: Text('Español: "${word.wordEs}"'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
               ),
             ),
 
             const SizedBox(height: 12),
 
+            // Ejemplo bilingüe con pausa y sin solapamiento
             Semantics(
               button: true,
-              label:
-                  'Escuchar ejemplo en inglés y explicación en español para ${word.wordEn}',
-              child: ElevatedButton.icon(
+              label: 'Escuchar ejemplo bilingüe de ${word.wordEn}',
+              child: FilledButton.icon(
                 onPressed: _speakExample,
                 icon: const Icon(Icons.record_voice_over_rounded),
                 label: const Text('Escuchar ejemplo bilingüe'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
               ),
             ),
 
             const SizedBox(height: 12),
 
+            // Detener reproducción
             Semantics(
               button: true,
-              label: 'Detener audio',
+              label: 'Detener reproducción de audio',
               child: TextButton.icon(
-                onPressed: _ttsService.stop,
+                onPressed: _stopAudio,
                 icon: const Icon(Icons.stop_circle_outlined),
                 label: const Text('Detener audio'),
               ),

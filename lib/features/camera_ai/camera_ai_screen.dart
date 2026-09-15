@@ -104,7 +104,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: Colors.white.withOpacity(0.45), width: 2),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.45), width: 2),
                         ),
                       ),
                     ),

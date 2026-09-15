@@ -16,4 +16,31 @@ class GlossaryWord {
     required this.exampleEs,
     this.aliases = const [],
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'wordEn': wordEn,
+      'wordEs': wordEs,
+      'category': category,
+      'example': example,
+      'exampleEs': exampleEs,
+      'aliases': aliases,
+    };
+  }
+
+  factory GlossaryWord.fromJson(Map<String, dynamic> json) {
+    return GlossaryWord(
+      id: json['id']?.toString() ?? '',
+      wordEn: json['wordEn']?.toString() ?? '',
+      wordEs: json['wordEs']?.toString() ?? '',
+      category: json['category']?.toString() ?? '',
+      example: json['example']?.toString() ?? '',
+      exampleEs: json['exampleEs']?.toString() ?? '',
+      aliases: (json['aliases'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+    );
+  }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../data/local_user_storage.dart';
 import 'auth_user.dart';
@@ -33,16 +34,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _register() async {
-    if (!_formKey.currentState!.validate()) return;
+    // Si la validación falla, se anuncia verbalmente a TalkBack
+    if (!_formKey.currentState!.validate()) {
+      SemanticsService.announce(
+        'El formulario contiene errores. Por favor revisa los campos señalados.',
+        TextDirection.ltr,
+      );
+      return;
+    }
 
     setState(() {
       _isLoading = true;
     });
 
+    // Criterio HU-01: Asignación automática del rol exclusivo de Estudiante
     final user = AuthUser(
       name: _nameController.text.trim(),
       email: _emailController.text.trim().toLowerCase(),
       password: _passwordController.text.trim(),
+      role: 'student',
     );
 
     final success = await LocalUserStorage.registerUser(user);
@@ -54,6 +64,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     if (success) {
+      SemanticsService.announce(
+        'Registro exitoso. Redirigiendo a inicio de sesión.',
+        TextDirection.ltr,
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Registro exitoso. Ahora puedes iniciar sesión.'),
@@ -67,6 +82,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
     } else {
+      SemanticsService.announce(
+        'Error. Ya existe un usuario registrado en este dispositivo.',
+        TextDirection.ltr,
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Ya existe un usuario registrado en este dispositivo.'),
@@ -95,6 +115,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Expresión regular estándar para validación estricta de correo electrónico
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Crear cuenta'),
@@ -102,35 +125,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: Semantics(
-            label: 'Pantalla de registro de usuario',
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Icon(
-                    Icons.visibility_outlined,
-                    size: 64,
-                    color: theme.colorScheme.primary,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Icon(
+                  Icons.visibility_outlined,
+                  size: 64,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Crear cuenta en AIr Sight',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Crear cuenta en AIr Sight',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Registra tus datos para guardar tu progreso dentro de la aplicación.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 32),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Registra tus datos para guardar tu progreso de inglés A1.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 32),
 
-                  TextFormField(
+                // Campo Nombre
+                Semantics(
+                  textField: true,
+                  label: 'Nombre completo',
+                  hint: 'Ingresa tu nombre y apellido',
+                  child: TextFormField(
                     controller: _nameController,
                     textInputAction: TextInputAction.next,
                     decoration: _inputDecoration(
@@ -142,15 +168,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         return 'Ingresa tu nombre';
                       }
                       if (value.trim().length < 3) {
-                        return 'El nombre es demasiado corto';
+                        return 'El nombre debe tener al menos 3 caracteres';
                       }
                       return null;
                     },
                   ),
+                ),
 
-                  const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-                  TextFormField(
+                // Campo Correo Electrónico
+                Semantics(
+                  textField: true,
+                  label: 'Correo electrónico',
+                  hint: 'Ingresa tu correo, por ejemplo usuario@correo.com',
+                  child: TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
@@ -162,16 +194,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       if (value == null || value.trim().isEmpty) {
                         return 'Ingresa tu correo';
                       }
-                      if (!value.contains('@') || !value.contains('.')) {
-                        return 'Ingresa un correo válido';
+                      if (!emailRegex.hasMatch(value.trim())) {
+                        return 'Ingresa un formato de correo válido (ej. nombre@dominio.com)';
                       }
                       return null;
                     },
                   ),
+                ),
 
-                  const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-                  TextFormField(
+                // Campo Contraseña
+                Semantics(
+                  textField: true,
+                  label: 'Contraseña',
+                  hint: 'Mínimo 6 caracteres',
+                  child: TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
                     textInputAction: TextInputAction.next,
@@ -202,15 +240,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         return 'Ingresa una contraseña';
                       }
                       if (value.trim().length < 6) {
-                        return 'Debe tener mínimo 6 caracteres';
+                        return 'La contraseña debe tener mínimo 6 caracteres';
                       }
                       return null;
                     },
                   ),
+                ),
 
-                  const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-                  TextFormField(
+                // Campo Confirmar Contraseña
+                Semantics(
+                  textField: true,
+                  label: 'Confirmar contraseña',
+                  hint: 'Vuelve a escribir la misma contraseña',
+                  child: TextFormField(
                     controller: _confirmPasswordController,
                     obscureText: _obscureConfirmPassword,
                     textInputAction: TextInputAction.done,
@@ -248,48 +292,50 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     },
                     onFieldSubmitted: (_) => _register(),
                   ),
+                ),
 
-                  const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-                  Semantics(
-                    label: 'Botón registrar usuario',
-                    button: true,
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _register,
-                      icon: _isLoading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.person_add_alt_1),
-                      label: Text(
-                        _isLoading ? 'Registrando...' : 'Registrarme',
-                      ),
+                // Botón Registrarme
+                Semantics(
+                  label: 'Registrarme. Crea tu cuenta de estudiante.',
+                  button: true,
+                  child: ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _register,
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.person_add_alt_1),
+                    label: Text(
+                      _isLoading ? 'Registrando...' : 'Registrarme',
                     ),
                   ),
+                ),
 
-                  const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-                  Semantics(
-                    label: 'Ir a pantalla de inicio de sesión',
-                    button: true,
-                    child: TextButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const LoginScreen(),
-                                ),
-                              );
-                            },
-                      child: const Text('Ya tengo cuenta'),
-                    ),
+                // Enlace a Iniciar Sesión
+                Semantics(
+                  label: 'Ya tengo cuenta. Ir a pantalla de inicio de sesión.',
+                  button: true,
+                  child: TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const LoginScreen(),
+                              ),
+                            );
+                          },
+                    child: const Text('Ya tengo cuenta'),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

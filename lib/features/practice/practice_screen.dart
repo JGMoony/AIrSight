@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../core/services/haptic_service.dart';
 import '../../core/services/progress_service.dart';
 import '../../core/services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -57,6 +58,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 
   void _startPractice() {
+    HapticService.selection();
     final filteredWords = _selectedCategory == 'Aleatorio'
         ? List<GlossaryWord>.from(glossaryWords)
         : glossaryWords
@@ -106,11 +108,13 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 
   Future<void> _playQuestionAudio() async {
+    await HapticService.selection();
     await _ttsService.speakEnglish(_currentWord.wordEn);
     await ProgressService.registerAudioPlay();
   }
 
   Future<void> _playQuestionAudioSlow() async {
+    await HapticService.selection();
     await _ttsService.speakEnglishSlow(_currentWord.wordEn);
     await ProgressService.registerAudioPlay();
   }
@@ -119,6 +123,12 @@ class _PracticeScreenState extends State<PracticeScreen> {
     if (_answered) return;
 
     final isCorrect = selectedWord.id == _currentWord.id;
+
+    if (isCorrect) {
+      await HapticService.success();
+    } else {
+      await HapticService.error();
+    }
 
     setState(() {
       _answered = true;
@@ -146,6 +156,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 
   void _nextQuestion() {
+    HapticService.selection();
     final isLastQuestion =
         _currentQuestionIndex + 1 >= _selectedQuestionLimit;
 
@@ -304,7 +315,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                           .toList(),
                       onChanged: (value) {
                         if (value == null) return;
-
+                        HapticService.selection();
                         setState(() {
                           _selectedCategory = value;
                         });
@@ -331,7 +342,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                           .toList(),
                       onChanged: (value) {
                         if (value == null) return;
-
+                        HapticService.selection();
                         setState(() {
                           _selectedQuestionLimit = value;
                         });
@@ -447,15 +458,27 @@ class _PracticeScreenState extends State<PracticeScreen> {
 
             const SizedBox(height: 12),
 
-            ..._options.map(
-              (word) {
+            ..._options.asMap().entries.map(
+              (entry) {
+                final index = entry.key;
+                final word = entry.value;
                 final icon = _optionIcon(word);
+
+                String semanticLabel = 'Opción ${index + 1}: ${word.wordEn}';
+                if (_answered) {
+                  if (word.id == _currentWord.id) {
+                    semanticLabel += ', respuesta correcta';
+                  } else if (word.id == _selectedWordId) {
+                    semanticLabel += ', respuesta incorrecta seleccionada';
+                  }
+                }
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Semantics(
-                    label: 'Opción ${word.wordEn}',
+                    label: semanticLabel,
                     button: true,
+                    excludeSemantics: true,
                     child: Card(
                       color: _optionColor(word),
                       child: ListTile(
