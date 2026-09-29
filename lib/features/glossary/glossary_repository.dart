@@ -4,7 +4,7 @@ import 'glossary_data.dart';
 import 'glossary_word.dart';
 
 class GlossaryRepository {
-  static const String _storageKey = 'custom_glossary_words_v1';
+  static const String _storageKey = 'custom_glossary_words_v3';
 
   /// Obtiene la lista actual de palabras (80 a 150 palabras).
   /// Si existen modificaciones guardadas por el Administrador, las carga;
@@ -19,9 +19,23 @@ class GlossaryRepository {
 
     try {
       final List<dynamic> decoded = jsonDecode(rawJson);
-      final list = decoded
-          .map((item) => GlossaryWord.fromJson(item as Map<String, dynamic>))
-          .toList();
+      final list = decoded.map((item) {
+        final w = GlossaryWord.fromJson(item as Map<String, dynamic>);
+        final defaultWord = glossaryWords.firstWhere(
+          (def) => def.id == w.id || def.wordEn.toLowerCase() == w.wordEn.toLowerCase(),
+          orElse: () => w,
+        );
+        final mergedAliases = {...w.aliases, ...defaultWord.aliases}.toList();
+        return GlossaryWord(
+          id: w.id,
+          wordEn: w.wordEn,
+          wordEs: w.wordEs,
+          category: w.category,
+          exampleEn: w.exampleEn.isNotEmpty ? w.exampleEn : defaultWord.exampleEn,
+          exampleEs: w.exampleEs.isNotEmpty ? w.exampleEs : defaultWord.exampleEs,
+          aliases: mergedAliases,
+        );
+      }).toList();
 
       if (list.isEmpty) {
         return List<GlossaryWord>.from(glossaryWords);

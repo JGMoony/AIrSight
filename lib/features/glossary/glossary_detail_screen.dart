@@ -55,18 +55,17 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
     await HapticService.selection();
     await ProgressService.registerAudioPlay();
 
-    // Reproducción bilingüe fluida esperando la finalización real y aplicando
-    // una pausa cognitiva de 300ms sin cortes de audio (WCAG 2.2 AA).
+    // Secuencia asíncrona de audio TTS:
+    // 1. Detiene cualquier locución previa del motor TTS.
+    // 2. Reproduce la oración en inglés (en-US).
+    // 3. Espera la finalización completa con awaitSpeakCompletion.
+    // 4. Pausa de cortesía (~300 ms).
+    // 5. Reproduce la traducción contextual completa en español (es-ES).
     await _ttsService.speakBilingual(
-      textEn: widget.word.example,
-      textEs: '${widget.word.wordEn} significa ${widget.word.wordEs}.',
+      textEn: widget.word.exampleEn,
+      textEs: widget.word.exampleEs,
       pause: const Duration(milliseconds: 300),
     );
-  }
-
-  Future<void> _stopAudio() async {
-    await HapticService.selection();
-    await _ttsService.stop();
   }
 
   Color _categoryColor(String category) {
@@ -115,7 +114,7 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
           children: [
             Semantics(
               label:
-                  'Detalle de palabra. ${word.wordEn}. Traducción ${word.wordEs}. Categoría ${word.category}. Ejemplo en inglés: ${word.example}',
+                  'Detalle de palabra. ${word.wordEn}. Traducción: ${word.wordEs}. Categoría: ${word.category}. Ejemplo en inglés: ${word.exampleEn}. Traducción del ejemplo: ${word.exampleEs}.',
               child: Card(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
@@ -166,21 +165,26 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
+                      // Línea 1: Oración en inglés con énfasis tipográfico
                       Text(
-                        word.example,
+                        word.exampleEn,
                         style: const TextStyle(
-                          fontSize: 19,
+                          fontSize: 20,
                           height: 1.35,
                           fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 8),
+                      // Línea 2: Traducción contextual íntegra al español (contraste accesible WCAG 2.2 AA)
                       Text(
-                        '${word.wordEn} significa ${word.wordEs}.',
+                        word.exampleEs,
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 17,
                           height: 1.35,
-                          color: AppTheme.textSecondary,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF334155),
                         ),
                       ),
                     ],
@@ -259,10 +263,10 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
 
             const SizedBox(height: 12),
 
-            // Ejemplo bilingüe con pausa y sin solapamiento
+            // Botón de ejemplo bilingüe (único botón de ejemplo, sin botón redundante de detener)
             Semantics(
               button: true,
-              label: 'Escuchar ejemplo bilingüe de ${word.wordEn}',
+              label: 'Escuchar ejemplo de uso en inglés y español',
               child: FilledButton.icon(
                 onPressed: _speakExample,
                 icon: const Icon(Icons.record_voice_over_rounded),
@@ -272,19 +276,6 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Detener reproducción
-            Semantics(
-              button: true,
-              label: 'Detener reproducción de audio',
-              child: TextButton.icon(
-                onPressed: _stopAudio,
-                icon: const Icon(Icons.stop_circle_outlined),
-                label: const Text('Detener audio'),
               ),
             ),
           ],

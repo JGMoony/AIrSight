@@ -146,16 +146,28 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
     return _words.where((word) => word.category == category).length;
   }
 
+  /// Normaliza una cadena de texto para búsquedas insensibles a mayúsculas y acentos diacríticos
+  /// (ej. "platano" coincide con "plátano", "boligrafo" con "bolígrafo").
+  String _normalizeText(String input) {
+    const withAccents = 'áàäâãéèëêíìïîóòöôõúùüûÁÀÄÂÃÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛ';
+    const withoutAccents = 'aaaaaeeeeiiiiooooouuuuaaaaaeeeeiiiiooooouuuu';
+    var result = input.toLowerCase().trim();
+    for (int i = 0; i < withAccents.length; i++) {
+      result = result.replaceAll(withAccents[i], withoutAccents[i]);
+    }
+    return result;
+  }
+
   List<GlossaryWord> get _filteredWords {
-    final query = searchText.toLowerCase().trim();
+    final query = _normalizeText(searchText);
 
     final words = _words.where((word) {
       final matchesSearch = query.isEmpty ||
-          word.wordEn.toLowerCase().contains(query) ||
-          word.wordEs.toLowerCase().contains(query) ||
-          word.category.toLowerCase().contains(query) ||
+          _normalizeText(word.wordEn).contains(query) ||
+          _normalizeText(word.wordEs).contains(query) ||
+          _normalizeText(word.category).contains(query) ||
           word.aliases.any(
-            (alias) => alias.toLowerCase().contains(query),
+            (alias) => _normalizeText(alias).contains(query),
           );
 
       final matchesCategory =
@@ -386,7 +398,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                   wordEn: wordEnController.text.trim().toLowerCase(),
                   wordEs: wordEsController.text.trim().toLowerCase(),
                   category: categoryController.text.trim(),
-                  example: exampleController.text.trim(),
+                  exampleEn: exampleController.text.trim(),
                   exampleEs: exampleEsController.text.trim(),
                   aliases: aliases.isEmpty ? [wordEnController.text.trim().toLowerCase()] : aliases,
                 );
@@ -793,7 +805,7 @@ class _WordCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       label:
-          '${word.wordEn}, traducción ${word.wordEs}, categoría ${word.category}. Toca dos veces para ver detalle.',
+          '${word.wordEn}, traducción ${word.wordEs}, categoría ${word.category}. Ejemplo: ${word.exampleEn}. Traducción del ejemplo: ${word.exampleEs}. Toca dos veces para ver detalle.',
       button: true,
       child: Card(
         child: InkWell(
@@ -843,14 +855,27 @@ class _WordCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '"${word.example}"',
+                        '"${word.exampleEn}"',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: AppTheme.textSecondary,
                           fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
+                      if (word.exampleEs.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          word.exampleEs,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF475569),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

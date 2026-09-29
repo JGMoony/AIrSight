@@ -8,78 +8,103 @@ class TtsService {
   bool _isConfigured = false;
   int _currentSpeechSession = 0;
 
+  /// Velocidad estándar pedagógica para palabras individuales (inglés y español).
+  static const double defaultSpeechRate = 0.45;
+
+  /// Velocidad lenta para refuerzo de articulación y fonética.
+  static const double slowSpeechRate = 0.20;
+
+  /// Velocidad moderada pedagógica para oraciones y ejemplos bilingües
+  /// (aproximadamente un 10-15% más pausada para favorecer la asimilación auditiva).
+  static const double bilingualExampleSpeechRate = 0.42;
+
   TtsService() {
-    _configureTts();
+    _ensureConfigured();
   }
 
-  void _configureTts() {
+  Future<void> _ensureConfigured() async {
     if (_isConfigured) return;
-    _flutterTts.awaitSpeakCompletion(true);
-    _isConfigured = true;
+    try {
+      await _flutterTts.awaitSpeakCompletion(true);
+      _isConfigured = true;
+    } catch (_) {}
   }
 
   Future<void> speakEnglish(String text) async {
     _currentSpeechSession++;
+    await _ensureConfigured();
     await _flutterTts.stop();
     await _flutterTts.setLanguage('en-US');
     await _flutterTts.setPitch(1.0);
-    await _flutterTts.setSpeechRate(0.45);
+    await _flutterTts.setSpeechRate(defaultSpeechRate);
     await _flutterTts.speak(text);
   }
 
   Future<void> speakSpanish(String text) async {
     _currentSpeechSession++;
+    await _ensureConfigured();
     await _flutterTts.stop();
     await _flutterTts.setLanguage('es-ES');
     await _flutterTts.setPitch(1.0);
-    await _flutterTts.setSpeechRate(0.45);
+    await _flutterTts.setSpeechRate(defaultSpeechRate);
     await _flutterTts.speak(text);
   }
 
   Future<void> speakEnglishSlow(String text) async {
     _currentSpeechSession++;
+    await _ensureConfigured();
     await _flutterTts.stop();
     await _flutterTts.setLanguage('en-US');
     await _flutterTts.setPitch(1.0);
-    await _flutterTts.setSpeechRate(0.20);
+    await _flutterTts.setSpeechRate(slowSpeechRate);
     await _flutterTts.speak(text);
   }
 
-  /// Reproduce un texto en inglés, aguarda su finalización real con awaitSpeakCompletion,
-  /// aplica una pausa deliberada para separación cognitiva (~300ms) y reproduce
-  /// la traducción/explicación en español sin colisión.
+  /// Reproduce un texto en inglés y español a una velocidad moderada pedagógica (0.42),
+  /// aguarda su finalización real con awaitSpeakCompletion, aplica una pausa
+  /// deliberada para procesamiento cognitivo (~300ms) y restaura la velocidad estándar (0.45).
   Future<void> speakBilingual({
     required String textEn,
     required String textEs,
     Duration pause = const Duration(milliseconds: 300),
+    double exampleRate = bilingualExampleSpeechRate,
   }) async {
     final session = ++_currentSpeechSession;
+    await _ensureConfigured();
     await _flutterTts.stop();
 
     if (session != _currentSpeechSession) return;
 
-    // Paso 1: Audio en inglés
-    await _flutterTts.setLanguage('en-US');
-    await _flutterTts.setPitch(1.0);
-    await _flutterTts.setSpeechRate(0.45);
-    await _flutterTts.speak(textEn);
+    try {
+      // Paso 1: Audio de la oración en inglés a velocidad moderada pedagógica
+      await _flutterTts.setLanguage('en-US');
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.setSpeechRate(exampleRate);
+      await _flutterTts.speak(textEn);
 
-    if (session != _currentSpeechSession) return;
+      if (session != _currentSpeechSession) return;
 
-    // Paso 2: Pausa para procesamiento cognitivo
-    await Future.delayed(pause);
+      // Paso 2: Pausa de cortesía para procesamiento cognitivo (~300ms)
+      await Future.delayed(pause);
 
-    if (session != _currentSpeechSession) return;
+      if (session != _currentSpeechSession) return;
 
-    // Paso 3: Audio en español
-    await _flutterTts.setLanguage('es-ES');
-    await _flutterTts.setPitch(1.0);
-    await _flutterTts.setSpeechRate(0.45);
-    await _flutterTts.speak(textEs);
+      // Paso 3: Audio de la traducción contextual en español a velocidad moderada pedagógica
+      await _flutterTts.setLanguage('es-ES');
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.setSpeechRate(exampleRate);
+      await _flutterTts.speak(textEs);
+    } finally {
+      // Restauración garantizada de la tasa de velocidad original configurada para palabras aisladas
+      if (session == _currentSpeechSession) {
+        await _flutterTts.setSpeechRate(defaultSpeechRate);
+      }
+    }
   }
 
   Future<void> stop() async {
     _currentSpeechSession++;
     await _flutterTts.stop();
+    await _flutterTts.setSpeechRate(defaultSpeechRate);
   }
 }

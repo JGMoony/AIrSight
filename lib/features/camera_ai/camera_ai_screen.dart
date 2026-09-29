@@ -40,7 +40,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
       _detectedWord = result;
     });
 
-    await _ttsService.speakSpanish('Objeto detectado. ${result.wordEn}, significa ${result.wordEs}.');
+    await _ttsService.speakSpanish('Objeto detectado: ${result.wordEn}, en español ${result.wordEs}.');
   }
 
   @override
