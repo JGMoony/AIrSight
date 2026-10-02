@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/services/auth_service.dart';
 import '../../core/services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/local_user_storage.dart';
 import '../auth/auth_user.dart';
-import '../auth/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -35,28 +35,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadUser() async {
-    final user = await LocalUserStorage.getUser();
+    final localUser = await LocalUserStorage.getUser();
+    final firebaseUser = AuthService().currentUser;
 
     if (!mounted) return;
 
     setState(() {
-      _user = user;
+      _user = localUser ??
+          (firebaseUser != null
+              ? AuthUser(
+                  name: firebaseUser.displayName ?? 'Estudiante',
+                  email: firebaseUser.email ?? '',
+                  password: '',
+                  role: 'student',
+                )
+              : null);
       _isLoadingUser = false;
     });
   }
 
   Future<void> _logout() async {
-    await LocalUserStorage.logout();
+    await AuthService().signOut();
 
     if (!mounted) return;
 
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const LoginScreen(),
-      ),
-      (route) => false,
-    );
+    // Con AuthGate escuchando authStateChanges(), volver a la raíz
+    // conduce automáticamente a LoginScreen
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   String get _displayName {

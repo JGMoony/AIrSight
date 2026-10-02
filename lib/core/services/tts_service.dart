@@ -1,9 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 /// Servicio de síntesis de voz (TTS) optimizado para accesibilidad (WCAG 2.2 AA).
+/// Implementa un patrón Singleton para persistir la locución entre navegaciones y transiciones de vistas.
 /// Maneja pronunciación bilingüe fluida esperando la finalización real del audio
 /// en lugar de retardos fijos, evitando solapamientos y cortes abruptos.
 class TtsService {
+  static final TtsService _instance = TtsService._internal();
+  factory TtsService() => _instance;
+  static TtsService get instance => _instance;
+
   final FlutterTts _flutterTts = FlutterTts();
   bool _isConfigured = false;
   int _currentSpeechSession = 0;
@@ -18,7 +24,7 @@ class TtsService {
   /// (aproximadamente un 10-15% más pausada para favorecer la asimilación auditiva).
   static const double bilingualExampleSpeechRate = 0.42;
 
-  TtsService() {
+  TtsService._internal() {
     _ensureConfigured();
   }
 
@@ -42,6 +48,7 @@ class TtsService {
 
   Future<void> speakSpanish(String text) async {
     _currentSpeechSession++;
+    debugPrint('[TtsService] speakSpanish: "$text"');
     await _ensureConfigured();
     await _flutterTts.stop();
     await _flutterTts.setLanguage('es-ES');
@@ -104,6 +111,7 @@ class TtsService {
 
   Future<void> stop() async {
     _currentSpeechSession++;
+    debugPrint('[TtsService] stop solicitado');
     await _flutterTts.stop();
     await _flutterTts.setSpeechRate(defaultSpeechRate);
   }

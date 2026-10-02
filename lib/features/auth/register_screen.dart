@@ -1,8 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-import '../../data/local_user_storage.dart';
-import 'auth_user.dart';
+import '../../core/services/auth_feedback_service.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/tts_service.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -14,6 +16,8 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  final AuthService _authService = AuthService();
+  final TtsService _ttsService = TtsService();
 
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -21,6 +25,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _isLoadingGoogle = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
@@ -30,6 +35,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    // No cortamos el motor TTS aquí (_ttsService.stop()) para que el audio
+    // de registro continúe reproduciéndose aun cuando esta vista sea desmontada/poppeada.
     super.dispose();
   }
 
@@ -43,55 +50,108 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
     setState(() {
       _isLoading = true;
     });
 
-    // Criterio HU-01: Asignación automática del rol exclusivo de Estudiante
-    final user = AuthUser(
-      name: _nameController.text.trim(),
-      email: _emailController.text.trim().toLowerCase(),
-      password: _passwordController.text.trim(),
-      role: 'student',
-    );
+    try {
+      // Criterio HU-01: Registro con asignación de rol de Estudiante
+      await _authService.signUp(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+        role: 'student',
+      );
 
-    final success = await LocalUserStorage.registerUser(user);
+      // Feedback auditivo y visual global persistente (independiente del ciclo de vida del Widget)
+      AuthFeedbackService.showRegisterSuccess();
 
-    if (!mounted) return;
+      // AuthGate detecta reactivamente authStateChanges() y conduce a HomeScreen
+      navigator.popUntil((route) => route.isFirst);
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      final errorMessage = AuthService.getFriendlyErrorMessage(e);
+
+      SemanticsService.announce(errorMessage, TextDirection.ltr);
+      _ttsService.speakSpanish(errorMessage);
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('Error inesperado al registrar usuario: $e');
+      const genericError =
+          'No se pudo completar el registro. Verifica tu conexión a internet.';
+      SemanticsService.announce(genericError, TextDirection.ltr);
+      _ttsService.speakSpanish(genericError);
+
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(genericError),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _registerWithGoogle() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
 
     setState(() {
-      _isLoading = false;
+      _isLoadingGoogle = true;
     });
 
-    if (success) {
-      SemanticsService.announce(
-        'Registro exitoso. Redirigiendo a inicio de sesión.',
-        TextDirection.ltr,
-      );
+    try {
+      final credential = await _authService.signInWithGoogle();
+      if (credential == null) {
+        // Usuario canceló la selección de cuenta
+        return;
+      }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Registro exitoso. Ahora puedes iniciar sesión.'),
-        ),
-      );
+      // Detección automática según metadatos de Google (isNewUser):
+      // isNewUser == true  -> 'Registro exitoso, bienvenido a Air Sight'
+      // isNewUser == false -> 'Bienvenido de vuelta'
+      AuthFeedbackService.showGoogleAuthSuccess(credential);
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
-        ),
+      // Limpia la pila hacia la raíz para revelar HomeScreen montado por AuthGate
+      navigator.popUntil((route) => route.isFirst);
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      final msg = AuthService.getFriendlyErrorMessage(e);
+      SemanticsService.announce(msg, TextDirection.ltr);
+      _ttsService.speakSpanish(msg);
+      messenger.showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
       );
-    } else {
-      SemanticsService.announce(
-        'Error. Ya existe un usuario registrado en este dispositivo.',
-        TextDirection.ltr,
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('Error en registro con Google: $e');
+      const msg = 'No se pudo completar el registro con Google. Intenta nuevamente.';
+      SemanticsService.announce(msg, TextDirection.ltr);
+      _ttsService.speakSpanish(msg);
+      messenger.showSnackBar(
+        const SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
       );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ya existe un usuario registrado en este dispositivo.'),
-        ),
-      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingGoogle = false;
+        });
+      }
     }
   }
 
@@ -114,9 +174,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // Expresión regular estándar para validación estricta de correo electrónico
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    final isAnyLoading = _isLoading || _isLoadingGoogle;
 
     return Scaffold(
       appBar: AppBar(
@@ -130,45 +189,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(
-                  Icons.visibility_outlined,
-                  size: 64,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+
                 Text(
-                  'Crear cuenta en AIr Sight',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineSmall?.copyWith(
+                  'Únete a AIr Sight',
+                  style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+
                 const SizedBox(height: 8),
+
                 Text(
-                  'Registra tus datos para guardar tu progreso de inglés A1.',
-                  textAlign: TextAlign.center,
+                  'Regístrate como estudiante para guardar tu progreso y vocabulario.',
                   style: theme.textTheme.bodyMedium,
                 ),
-                const SizedBox(height: 32),
 
-                // Campo Nombre
+                const SizedBox(height: 28),
+
+                // Campo Nombre Completo
                 Semantics(
                   textField: true,
                   label: 'Nombre completo',
-                  hint: 'Ingresa tu nombre y apellido',
+                  hint: 'Ingresa tu nombre completo',
                   child: TextFormField(
                     controller: _nameController,
                     textInputAction: TextInputAction.next,
+                    enabled: !isAnyLoading,
                     decoration: _inputDecoration(
                       label: 'Nombre completo',
                       icon: Icons.person_outline,
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
-                        return 'Ingresa tu nombre';
+                        return 'Ingresa tu nombre completo';
                       }
                       if (value.trim().length < 3) {
-                        return 'El nombre debe tener al menos 3 caracteres';
+                        return 'El nombre debe tener mínimo 3 caracteres';
                       }
                       return null;
                     },
@@ -181,11 +238,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Semantics(
                   textField: true,
                   label: 'Correo electrónico',
-                  hint: 'Ingresa tu correo, por ejemplo usuario@correo.com',
+                  hint: 'Ingresa tu correo institucional o personal',
                   child: TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
+                    enabled: !isAnyLoading,
                     decoration: _inputDecoration(
                       label: 'Correo electrónico',
                       icon: Icons.email_outlined,
@@ -195,7 +253,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         return 'Ingresa tu correo';
                       }
                       if (!emailRegex.hasMatch(value.trim())) {
-                        return 'Ingresa un formato de correo válido (ej. nombre@dominio.com)';
+                        return 'Ingresa un correo válido (ej. estudiante@correo.com)';
                       }
                       return null;
                     },
@@ -208,11 +266,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Semantics(
                   textField: true,
                   label: 'Contraseña',
-                  hint: 'Mínimo 6 caracteres',
+                  hint: 'Crea una contraseña segura de mínimo 6 caracteres',
                   child: TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
                     textInputAction: TextInputAction.next,
+                    enabled: !isAnyLoading,
                     decoration: _inputDecoration(
                       label: 'Contraseña',
                       icon: Icons.lock_outline,
@@ -253,11 +312,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Semantics(
                   textField: true,
                   label: 'Confirmar contraseña',
-                  hint: 'Vuelve a escribir la misma contraseña',
+                  hint: 'Vuelve a escribir tu contraseña exactamente igual',
                   child: TextFormField(
                     controller: _confirmPasswordController,
                     obscureText: _obscureConfirmPassword,
                     textInputAction: TextInputAction.done,
+                    enabled: !isAnyLoading,
                     decoration: _inputDecoration(
                       label: 'Confirmar contraseña',
                       icon: Icons.lock_reset_outlined,
@@ -290,18 +350,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       }
                       return null;
                     },
-                    onFieldSubmitted: (_) => _register(),
+                    onFieldSubmitted: (_) => isAnyLoading ? null : _register(),
                   ),
                 ),
 
                 const SizedBox(height: 24),
 
-                // Botón Registrarme
+                // Botón Registrarme con Correo
                 Semantics(
                   label: 'Registrarme. Crea tu cuenta de estudiante.',
                   button: true,
                   child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _register,
+                    onPressed: isAnyLoading ? null : _register,
                     icon: _isLoading
                         ? const SizedBox(
                             width: 18,
@@ -315,14 +375,63 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 18),
+
+                // Separador
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Text(
+                        'O continúa con',
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+
+                const SizedBox(height: 18),
+
+                // Botón Registrarse con Google
+                Semantics(
+                  label: 'Registrarse con cuenta de Google',
+                  button: true,
+                  child: OutlinedButton.icon(
+                    onPressed: isAnyLoading ? null : _registerWithGoogle,
+                    icon: _isLoadingGoogle
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.g_mobiledata_rounded, size: 30),
+                    label: Text(
+                      _isLoadingGoogle
+                          ? 'Conectando con Google...'
+                          : 'Registrarse con Google',
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(
+                        color: theme.colorScheme.outlineVariant,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 14),
 
                 // Enlace a Iniciar Sesión
                 Semantics(
                   label: 'Ya tengo cuenta. Ir a pantalla de inicio de sesión.',
                   button: true,
                   child: TextButton(
-                    onPressed: _isLoading
+                    onPressed: isAnyLoading
                         ? null
                         : () {
                             Navigator.pushReplacement(
@@ -332,7 +441,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             );
                           },
-                    child: const Text('Ya tengo cuenta'),
+                    child: const Text('¿Ya tienes cuenta? Inicia sesión'),
                   ),
                 ),
               ],

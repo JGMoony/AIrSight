@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "343087765656",
+    "project_id": "air-sight",
+    "storage_bucket": "air-sight.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:343087765656:android:d31f0944d2bcafb6ea58ed",
+        "android_client_info": {
+          "package_name": "com.example.air_sight"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDNEBBLNnFihZcWESCLl-lk4UWgJt_4r3Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

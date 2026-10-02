@@ -59,7 +59,7 @@ const List<GlossaryWord> glossaryWords = [
   // Home & Kitchen (26-39)
   GlossaryWord(id: '26', wordEn: 'bed', wordEs: 'cama', category: 'Home', exampleEn: 'The bed is comfortable.', exampleEs: 'La cama es cómoda.', aliases: ['bed', 'furniture', 'mattress']),
   GlossaryWord(id: '27', wordEn: 'bottle', wordEs: 'botella', category: 'Kitchen', exampleEn: 'The water bottle is on the table.', exampleEs: 'La botella de agua está sobre la mesa.', aliases: ['bottle', 'water bottle', 'drinkware', 'plastic bottle']),
-  GlossaryWord(id: '28', wordEn: 'clock', wordEs: 'reloj de pared', category: 'Home', exampleEn: 'The clock is on the wall.', exampleEs: 'El reloj está en la pared.', aliases: ['clock', 'wall clock', 'analog clock', 'digital clock']),
+  GlossaryWord(id: '28', wordEn: 'clock', wordEs: 'reloj', category: 'Home', exampleEn: 'The clock is on the wall.', exampleEs: 'El reloj está en la pared.', aliases: ['clock', 'wall clock', 'analog clock', 'digital clock']),
   GlossaryWord(id: '29', wordEn: 'cup', wordEs: 'taza', category: 'Kitchen', exampleEn: 'I drink coffee from a cup.', exampleEs: 'Tomo café en una taza.', aliases: ['cup', 'coffee cup', 'mug', 'teacup', 'drinkware']),
   GlossaryWord(id: '30', wordEn: 'door', wordEs: 'puerta', category: 'Home', exampleEn: 'Please close the door.', exampleEs: 'Por favor cierra la puerta.', aliases: ['door', 'doorway']),
   GlossaryWord(id: '31', wordEn: 'fork', wordEs: 'tenedor', category: 'Kitchen', exampleEn: 'I eat with a fork.', exampleEs: 'Como con un tenedor.', aliases: ['fork', 'cutlery', 'utensil']),
