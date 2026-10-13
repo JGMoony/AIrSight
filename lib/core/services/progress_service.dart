@@ -1,6 +1,9 @@
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../services/firestore_service.dart';
 
 class ProgressSummary {
   final int wordsViewed;
@@ -119,6 +122,15 @@ class ProgressService {
       _progressKey,
       jsonEncode(updatedSummary.toJson()),
     );
+
+    // Sincronización en la nube para el piloto de grado si el usuario está autenticado
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      FirestoreService.instance.syncProgressSummary(
+        userId: currentUser.uid,
+        summaryJson: updatedSummary.toJson(),
+      );
+    }
   }
 
   /// Registra una palabra vista.
@@ -131,6 +143,15 @@ class ProgressService {
         wordsViewed: current.wordsViewed + 1,
       ),
     );
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      FirestoreService.instance.recordPilotMetricEvent(
+        userId: currentUser.uid,
+        tipoEvento: 'word_view',
+        metadata: wordId != null ? {'wordId': wordId} : null,
+      );
+    }
   }
 
   /// Registra reproducción de audio.
@@ -143,6 +164,14 @@ class ProgressService {
         audioPlays: current.audioPlays + 1,
       ),
     );
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      FirestoreService.instance.recordPilotMetricEvent(
+        userId: currentUser.uid,
+        tipoEvento: 'audio_play',
+      );
+    }
   }
 
   /// Alias por si luego usas este otro nombre.
@@ -158,6 +187,14 @@ class ProgressService {
         cameraUses: current.cameraUses + 1,
       ),
     );
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      FirestoreService.instance.recordPilotMetricEvent(
+        userId: currentUser.uid,
+        tipoEvento: 'camera_use',
+      );
+    }
   }
 
   static Future<void> registerPracticeAnswer({
@@ -174,6 +211,15 @@ class ProgressService {
             isCorrect ? current.incorrectAnswers : current.incorrectAnswers + 1,
       ),
     );
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      FirestoreService.instance.recordPilotMetricEvent(
+        userId: currentUser.uid,
+        tipoEvento: 'practice_answer',
+        metadata: {'isCorrect': isCorrect},
+      );
+    }
   }
 
   static Future<void> resetProgress() async {

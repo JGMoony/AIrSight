@@ -1,10 +1,26 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/firestore_service.dart';
 import 'glossary_data.dart';
 import 'glossary_word.dart';
 
 class GlossaryRepository {
   static const String _storageKey = 'custom_glossary_words_v3';
+
+  /// Stream reactivo de palabras desde Cloud Firestore ('glosario_a1').
+  static Stream<List<GlossaryWord>> streamWords({String? category}) {
+    return FirestoreService.instance.streamGlossaryWords(category: category);
+  }
+
+  /// Siembra o sube el catálogo base en Firestore si la colección 'glosario_a1' está vacía.
+  static Future<int> seedToFirestore({bool force = false}) {
+    return FirestoreService.instance.subirGlosarioInicial(force: force);
+  }
+
+  /// Sube y sincroniza el catálogo inicial A1 en Cloud Firestore ('glosario_a1').
+  static Future<int> subirGlosarioInicial({bool force = false}) {
+    return FirestoreService.instance.subirGlosarioInicial(force: force);
+  }
 
   /// Obtiene la lista actual de palabras (80 a 150 palabras).
   /// Si existen modificaciones guardadas por el Administrador, las carga;
@@ -59,6 +75,9 @@ class GlossaryRepository {
     current.removeWhere((w) => w.id == word.id || w.wordEn.toLowerCase() == word.wordEn.toLowerCase());
     current.add(word);
     await saveWords(current);
+    try {
+      await FirestoreService.instance.saveGlossaryWord(word);
+    } catch (_) {}
   }
 
   /// Modifica una entrada de vocabulario existente (HU-09)
@@ -71,6 +90,9 @@ class GlossaryRepository {
       current.add(word);
     }
     await saveWords(current);
+    try {
+      await FirestoreService.instance.saveGlossaryWord(word);
+    } catch (_) {}
   }
 
   /// Elimina una entrada del catálogo (HU-09)

@@ -29,6 +29,7 @@ class VoiceSearchService {
   Future<bool> startListening({
     required Function(String text, bool isFinal) onResult,
     Function(String error)? onError,
+    String? localeId,
   }) async {
     if (!_isInitialized) {
       final ready = await initialize(onError: onError);
@@ -47,6 +48,7 @@ class VoiceSearchService {
           listenMode: stt.ListenMode.confirmation,
           cancelOnError: true,
           partialResults: true,
+          localeId: localeId,
         ),
       );
       return true;

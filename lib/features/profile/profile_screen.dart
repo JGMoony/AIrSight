@@ -4,6 +4,8 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/local_user_storage.dart';
+import '../../models/user_model.dart';
+import '../../services/firestore_service.dart';
 import '../auth/auth_user.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -17,6 +19,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final TtsService _ttsService = TtsService();
 
   AuthUser? _user;
+  UserModel? _firestoreUser;
   bool _isLoadingUser = true;
 
   bool hapticsEnabled = true;
@@ -37,17 +40,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadUser() async {
     final localUser = await LocalUserStorage.getUser();
     final firebaseUser = AuthService().currentUser;
+    UserModel? firestoreModel;
+
+    if (firebaseUser != null) {
+      try {
+        firestoreModel = await FirestoreService.instance.getUser(firebaseUser.uid);
+      } catch (_) {}
+    }
 
     if (!mounted) return;
 
     setState(() {
+      _firestoreUser = firestoreModel;
       _user = localUser ??
           (firebaseUser != null
               ? AuthUser(
-                  name: firebaseUser.displayName ?? 'Estudiante',
+                  name: firestoreModel?.nombre.isNotEmpty == true
+                      ? firestoreModel!.nombre
+                      : (firebaseUser.displayName ?? 'Estudiante'),
                   email: firebaseUser.email ?? '',
                   password: '',
-                  role: 'student',
+                  role: firestoreModel?.rol ?? 'estudiante',
                 )
               : null);
       _isLoadingUser = false;
@@ -111,12 +124,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         height: 1.35,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Modo MVP local. En la siguiente fase puede conectarse Firebase Authentication.',
-                      style: TextStyle(
-                        color: AppTheme.textSecondary,
-                        height: 1.35,
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.school_rounded,
+                            size: 16,
+                            color: AppTheme.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _firestoreUser?.roleLabel ?? 'Estudiante',
+                            style: const TextStyle(
+                              color: AppTheme.primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

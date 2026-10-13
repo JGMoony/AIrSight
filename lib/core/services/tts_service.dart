@@ -109,6 +109,64 @@ class TtsService {
     }
   }
 
+  /// Reproduce la respuesta del asistente de voz alternando idiomas pedagógicamente:
+  /// 1. Explicación en español (es-ES)
+  /// 2. Pausa cognitiva (~350ms)
+  /// 3. Frase o ejemplo en inglés con acento en-US
+  /// 4. Pausa cognitiva (~300ms)
+  /// 5. Traducción de la frase en español (es-ES)
+  Future<void> speakVoiceAssistantResponse({
+    required String explanationEs,
+    required String exampleEn,
+    required String exampleEs,
+    Duration pause = const Duration(milliseconds: 350),
+    double exampleRate = bilingualExampleSpeechRate,
+  }) async {
+    final session = ++_currentSpeechSession;
+    await _ensureConfigured();
+    await _flutterTts.stop();
+
+    if (session != _currentSpeechSession) return;
+
+    try {
+      // 1. Explicación en español
+      if (explanationEs.trim().isNotEmpty) {
+        await _flutterTts.setLanguage('es-ES');
+        await _flutterTts.setPitch(1.0);
+        await _flutterTts.setSpeechRate(defaultSpeechRate);
+        await _flutterTts.speak(explanationEs.trim());
+      }
+
+      if (session != _currentSpeechSession) return;
+      await Future.delayed(pause);
+      if (session != _currentSpeechSession) return;
+
+      // 2. Frase de ejemplo en inglés (en-US)
+      if (exampleEn.trim().isNotEmpty) {
+        await _flutterTts.setLanguage('en-US');
+        await _flutterTts.setPitch(1.0);
+        await _flutterTts.setSpeechRate(exampleRate);
+        await _flutterTts.speak(exampleEn.trim());
+      }
+
+      if (session != _currentSpeechSession) return;
+      await Future.delayed(pause);
+      if (session != _currentSpeechSession) return;
+
+      // 3. Traducción de la frase en español (es-ES)
+      if (exampleEs.trim().isNotEmpty) {
+        await _flutterTts.setLanguage('es-ES');
+        await _flutterTts.setPitch(1.0);
+        await _flutterTts.setSpeechRate(exampleRate);
+        await _flutterTts.speak(exampleEs.trim());
+      }
+    } finally {
+      if (session == _currentSpeechSession) {
+        await _flutterTts.setSpeechRate(defaultSpeechRate);
+      }
+    }
+  }
+
   Future<void> stop() async {
     _currentSpeechSession++;
     debugPrint('[TtsService] stop solicitado');

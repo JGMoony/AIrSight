@@ -116,4 +116,18 @@ class LocalUserStorage {
     await prefs.remove(_userKey);
     await prefs.remove(_sessionKey);
   }
+
+  /// Actualiza el rol del usuario en la sesión local
+  static Future<void> setLocalRole(String role) async {
+    final current = await getUser();
+    if (current != null) {
+      final updated = AuthUser(
+        name: current.name,
+        email: current.email,
+        password: current.password,
+        role: role,
+      );
+      await registerUser(updated);
+    }
+  }
 }

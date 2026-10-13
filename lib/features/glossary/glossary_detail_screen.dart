@@ -184,7 +184,7 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
                           fontSize: 17,
                           height: 1.35,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF334155),
+                          color: AppTheme.textSecondary,
                         ),
                       ),
                     ],

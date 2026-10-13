@@ -1,14 +1,14 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../data/local_user_storage.dart';
 import '../../features/auth/auth_user.dart';
+import '../../models/user_model.dart';
+import '../../services/firestore_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   /// Stream reactivo de estado de sesión para AuthGate
@@ -22,11 +22,12 @@ class AuthService {
     required String name,
     required String email,
     required String password,
-    String role = 'student',
+    String role = 'estudiante',
   }) async {
     final cleanEmail = email.trim().toLowerCase();
     final cleanPassword = password.trim();
     final cleanName = name.trim();
+    final effectiveRole = cleanEmail == 'admin@airsight.com' ? 'administrador' : role;
 
     // 1. Crear credencial en el servicio de autenticación
     final userCredential = await _auth.createUserWithEmailAndPassword(
@@ -39,16 +40,16 @@ class AuthService {
       // 2. Asignar el nombre en el perfil
       await user.updateDisplayName(cleanName);
 
-      // 3. Persistir el perfil y rol en Firestore (Colección users)
+      // 3. Persistir el perfil y rol en Firestore (Colección 'users')
       try {
-        await _firestore.collection('users').doc(user.uid).set({
-          'uid': user.uid,
-          'name': cleanName,
-          'email': cleanEmail,
-          'role': role,
-          'authProvider': 'password',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        final userModel = UserModel(
+          id: user.uid,
+          nombre: cleanName,
+          email: cleanEmail,
+          rol: effectiveRole,
+          fechaRegistro: DateTime.now(),
+        );
+        await FirestoreService.instance.saveUser(userModel);
       } catch (e) {
         debugPrint('Advertencia al guardar usuario en Firestore: $e');
       }
@@ -59,7 +60,7 @@ class AuthService {
           name: cleanName,
           email: cleanEmail,
           password: '',
-          role: role,
+          role: effectiveRole,
         ),
       );
     }
@@ -151,30 +152,30 @@ class AuthService {
   /// Sincroniza los datos del usuario en Firestore y en caché local
   Future<void> _syncUserProfile(
     User user, {
-    String fallbackRole = 'student',
+    String fallbackRole = 'estudiante',
     String providerName = 'password',
   }) async {
-    String role = fallbackRole;
+    final cleanEmail = (user.email ?? '').trim().toLowerCase();
+    String role = cleanEmail == 'admin@airsight.com' ? 'administrador' : fallbackRole;
     String name =
         user.displayName ?? (user.email?.split('@').first ?? 'Estudiante');
 
     try {
-      final docRef = _firestore.collection('users').doc(user.uid);
-      final doc = await docRef.get();
+      final existingUser = await FirestoreService.instance.getUser(user.uid);
 
-      if (doc.exists && doc.data() != null) {
-        role = doc.data()!['role'] ?? fallbackRole;
-        name = doc.data()!['name'] ?? name;
+      if (existingUser != null) {
+        role = existingUser.rol.isNotEmpty ? existingUser.rol : role;
+        name = existingUser.nombre.isNotEmpty ? existingUser.nombre : name;
       } else {
-        // Si el usuario no existía en Firestore (ej. primer login con Google), se crea
-        await docRef.set({
-          'uid': user.uid,
-          'name': name,
-          'email': user.email ?? '',
-          'role': role,
-          'authProvider': providerName,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        // Si el usuario no existía en Firestore (ej. primer login con Google), se crea en 'users'
+        final userModel = UserModel(
+          id: user.uid,
+          nombre: name,
+          email: user.email ?? '',
+          rol: role,
+          fechaRegistro: DateTime.now(),
+        );
+        await FirestoreService.instance.saveUser(userModel);
       }
     } catch (e) {
       debugPrint('Sincronización Firestore con fallback: $e');
@@ -188,6 +189,35 @@ class AuthService {
         role: role,
       ),
     );
+  }
+
+  /// Asigna un rol ('administrador' o 'estudiante') a un UID específico.
+  Future<void> assignUserRole({
+    required String uid,
+    required String role,
+  }) async {
+    final canonicalRole = (role.trim().toLowerCase() == 'admin' ||
+            role.trim().toLowerCase() == 'administrador')
+        ? 'administrador'
+        : 'estudiante';
+    await FirestoreService.instance.setUserRole(userId: uid, role: canonicalRole);
+    final user = currentUser;
+    if (user != null && user.uid == uid) {
+      await LocalUserStorage.setLocalRole(canonicalRole);
+    }
+  }
+
+  /// Asigna un rol buscando por correo electrónico exacto.
+  Future<UserModel?> assignRoleByEmail({
+    required String email,
+    required String role,
+  }) async {
+    final user = await FirestoreService.instance.getUserByEmail(email);
+    if (user != null) {
+      await assignUserRole(uid: user.uid, role: role);
+      return user.copyWith(rol: role);
+    }
+    return null;
   }
 
   /// Envío de correo para restablecer contraseña

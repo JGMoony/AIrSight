@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../core/services/auth_service.dart';
 import '../../core/services/haptic_service.dart';
 import '../../core/services/tts_service.dart';
 import '../../core/services/voice_search_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/local_user_storage.dart';
+import '../../services/firestore_service.dart';
 import 'glossary_data.dart';
 import 'glossary_detail_screen.dart';
 import 'glossary_repository.dart';
@@ -45,10 +47,24 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
   }
 
   Future<void> _checkAdminRole() async {
-    final user = await LocalUserStorage.getUser();
+    final localUser = await LocalUserStorage.getUser();
+    final firebaseUser = AuthService().currentUser;
+
+    bool admin = localUser?.role == 'admin' ||
+        localUser?.role == 'administrador' ||
+        firebaseUser?.email?.trim().toLowerCase() == 'admin@airsight.com';
+
+    if (!admin && firebaseUser != null) {
+      try {
+        final firestoreUser =
+            await FirestoreService.instance.getUser(firebaseUser.uid);
+        admin = firestoreUser?.isAdmin == true;
+      } catch (_) {}
+    }
+
     if (!mounted) return;
     setState(() {
-      _isAdmin = user?.role == 'admin';
+      _isAdmin = admin;
     });
   }
 
@@ -71,6 +87,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
     }
 
     final started = await _voiceService.startListening(
+      localeId: 'es_CO',
       onResult: (text, isFinal) {
         setState(() {
           searchText = text;
@@ -100,7 +117,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
         _isListening = true;
       });
       SemanticsService.announce(
-        'Micrófono activado. Di una palabra en inglés o español.',
+        'Micrófono activado. Di una palabra clave para buscar en el glosario.',
         TextDirection.ltr,
       );
     } else {
@@ -615,16 +632,18 @@ class _SearchBox extends StatelessWidget {
         controller: controller,
         textInputAction: TextInputAction.search,
         onSubmitted: onSubmitted,
+        style: const TextStyle(color: AppTheme.textPrimary),
         decoration: InputDecoration(
           hintText: isListening ? 'Escuchando tu voz...' : 'Buscar palabra...',
-          prefixIcon: const Icon(Icons.search_rounded),
+          hintStyle: const TextStyle(color: AppTheme.textSecondary),
+          prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecondary),
           suffixIcon: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (controller.text.isNotEmpty)
                 IconButton(
                   onPressed: onClear,
-                  icon: const Icon(Icons.close_rounded),
+                  icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary),
                   tooltip: 'Borrar búsqueda',
                 ),
               Semantics(
@@ -636,7 +655,7 @@ class _SearchBox extends StatelessWidget {
                   onPressed: onMicPressed,
                   icon: Icon(
                     isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
-                    color: isListening ? Colors.red : AppTheme.primary,
+                    color: isListening ? Colors.red : AppTheme.primaryLight,
                   ),
                 ),
               ),
@@ -644,8 +663,19 @@ class _SearchBox extends StatelessWidget {
             ],
           ),
           filled: true,
+          fillColor: AppTheme.surface,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
           ),
         ),
         onChanged: onChanged,
@@ -668,21 +698,29 @@ class _SummaryCard extends StatelessWidget {
     return Semantics(
       label: '$totalWords palabras y $totalCategories categorías disponibles',
       child: Card(
+        color: AppTheme.surface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Row(
             children: [
               Container(
-                width: 54,
-                height: 54,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(20),
+                  color: AppTheme.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(
                   Icons.menu_book_rounded,
-                  color: AppTheme.primary,
-                  size: 30,
+                  color: AppTheme.primaryLight,
+                  size: 28,
                 ),
               ),
               const SizedBox(width: 14),
@@ -692,6 +730,7 @@ class _SummaryCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
               ),
@@ -727,40 +766,42 @@ class _CategoryCard extends StatelessWidget {
       button: true,
       selected: isSelected,
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isSelected ? color : Colors.transparent,
-              width: 2,
+              color: isSelected ? color : Colors.white.withValues(alpha: 0.08),
+              width: isSelected ? 2 : 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.25),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
           ),
           padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 50,
-                height: 50,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
+                  color: color.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   icon,
                   color: color,
-                  size: 27,
+                  size: 26,
                 ),
               ),
               const SizedBox(height: 10),
@@ -769,7 +810,9 @@ class _CategoryCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: AppTheme.textPrimary,
                 ),
               ),
               const SizedBox(height: 4),
@@ -808,8 +851,16 @@ class _WordCard extends StatelessWidget {
           '${word.wordEn}, traducción ${word.wordEs}, categoría ${word.category}. Ejemplo: ${word.exampleEn}. Traducción del ejemplo: ${word.exampleEs}. Toca dos veces para ver detalle.',
       button: true,
       child: Card(
+        color: AppTheme.surface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(18),
@@ -825,7 +876,7 @@ class _WordCard extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: categoryColor.withValues(alpha: 0.12),
+                          color: categoryColor.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
@@ -841,8 +892,9 @@ class _WordCard extends StatelessWidget {
                       Text(
                         word.wordEn,
                         style: const TextStyle(
-                          fontSize: 21,
+                          fontSize: 22,
                           fontWeight: FontWeight.w900,
+                          color: AppTheme.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -861,7 +913,7 @@ class _WordCard extends StatelessWidget {
                         style: const TextStyle(
                           color: AppTheme.textSecondary,
                           fontStyle: FontStyle.italic,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       if (word.exampleEs.isNotEmpty) ...[
@@ -870,8 +922,8 @@ class _WordCard extends StatelessWidget {
                           word.exampleEs,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF475569),
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.45),
                             fontSize: 13,
                           ),
                         ),
@@ -884,6 +936,11 @@ class _WordCard extends StatelessWidget {
                   label: 'Escuchar palabra ${word.wordEn}',
                   button: true,
                   child: IconButton.filledTonal(
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppTheme.primary.withValues(alpha: 0.15),
+                      foregroundColor: AppTheme.primaryLight,
+                      minimumSize: const Size(48, 48),
+                    ),
                     onPressed: onPlay,
                     icon: const Icon(Icons.volume_up_rounded),
                   ),
