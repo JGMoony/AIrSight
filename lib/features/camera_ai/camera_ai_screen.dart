@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 
 import '../../core/services/haptic_service.dart';
@@ -10,8 +13,12 @@ import '../../core/services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../services/gemini_service.dart';
 
-/// Pantalla moderna y accesible de exploración visual con IA (Estilo Lovable).
-/// Utiliza Gemini Flash para identificar objetos cotidianos básicos de nivel A1.
+/// Alias de compatibilidad hacia CameraAiScreen según especificación IEEE 830
+typedef CameraScreen = CameraAiScreen;
+
+/// Pantalla moderna y accesible de exploración visual con IA (Estilo Lovable / shadcn).
+/// Utiliza Gemini para identificar objetos cotidianos básicos de nivel A1
+/// cumpliendo rigurosamente con RF-03, RF-04, RF-05, RNF-01, RNF-02 y RNF-03.
 class CameraAiScreen extends StatefulWidget {
   const CameraAiScreen({super.key});
 
@@ -26,7 +33,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
   bool _isCameraReady = false;
   bool _isAnalyzing = false;
 
-  GeminiObjectResult? _detectedResult;
+  Map<String, dynamic>? _detectedData;
   String? _detectionError;
 
   @override
@@ -64,8 +71,22 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
     } catch (_) {}
   }
 
-  /// Captura un fotograma de la cámara real y lo envía a Gemini Flash
+  /// Comprobación rápida de conectividad a internet (< 1s) según RNF-02
+  Future<bool> _hayConexionInternet() async {
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(milliseconds: 900));
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Captura un fotograma de la cámara real y lo envía a Gemini 
   Future<void> _captureFromCamera() async {
+    if (_isAnalyzing) return;
+
+    // 1. Verificación previa de hardware de cámara
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
       await _initCamera();
       if (_cameraController == null || !_cameraController!.value.isInitialized) {
@@ -81,21 +102,62 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
       }
     }
 
+    // 2. Validación Offline Previa (< 1s) (RNF-02)
+    final bool conectado = await _hayConexionInternet();
+    if (!conectado) {
+      await HapticFeedback.heavyImpact();
+      const msg = 'Se requiere conexión a internet para analizar la imagen';
+      SemanticsService.announce(msg, TextDirection.ltr);
+      await _ttsService.speakSpanish(msg);
+      if (mounted) {
+        setState(() {
+          _detectedData = null;
+          _detectionError = msg;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(msg)),
+        );
+      }
+      return;
+    }
+
+    // 3. Retroalimentación Inmediata (< 400ms) (RNF-01 / Sec 3.2.3)
+    await HapticFeedback.mediumImpact();
+    SemanticsService.announce(
+      'Capturando y analizando imagen, por favor espera...',
+      TextDirection.ltr,
+    );
+
+    setState(() {
+      _isAnalyzing = true;
+      _detectedData = null;
+      _detectionError = null;
+    });
+
+    // 4. Captura fotográfica e inferencia exclusivamente en memoria volátil (RNF-03)
     try {
-      await HapticService.selection();
       final xfile = await _cameraController!.takePicture();
       final bytes = await xfile.readAsBytes();
+
+      // Eliminación inmediata del archivo temporal del almacenamiento persistente
+      try {
+        await File(xfile.path).delete();
+      } catch (e) {
+        debugPrint('[RNF-03] Archivo temporal limpiado: $e');
+      }
+
       await _analyzeImageBytes(bytes);
     } catch (e) {
       debugPrint('Error al capturar imagen: $e');
       if (!mounted) return;
+      setState(() => _isAnalyzing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al capturar imagen: $e')),
       );
     }
   }
 
-  /// Genera una imagen JPEG en memoria para probar objetos de muestra
+  /// Genera una imagen JPEG en memoria para probar objetos de muestra (Emulador)
   Uint8List _generateSampleJpg(String label) {
     final image = img.Image(width: 320, height: 240);
     img.fill(image, color: img.ColorRgb8(245, 247, 250));
@@ -110,55 +172,77 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
     return Uint8List.fromList(img.encodeJpg(image));
   }
 
-  /// Analiza los bytes de la imagen con la instrucción estricta de Gemini Flash
+  /// Analiza los bytes de la imagen con la instrucción estricta de Gemini
   Future<void> _analyzeImageBytes(Uint8List bytes) async {
-    if (_isAnalyzing) return;
+    if (!_isAnalyzing) {
+      setState(() {
+        _isAnalyzing = true;
+        _detectedData = null;
+        _detectionError = null;
+      });
+      SemanticsService.announce(
+        'Capturando y analizando imagen, por favor espera...',
+        TextDirection.ltr,
+      );
+    }
 
-    setState(() {
-      _isAnalyzing = true;
-      _detectedResult = null;
-      _detectionError = null;
-    });
-
-    SemanticsService.announce('Analizando imagen con Gemini Flash...', TextDirection.ltr);
-
-    final result = await GeminiService.instance.identificarObjeto(bytes);
+    final result = await GeminiService.instance.identificarObjetoA1(bytes);
     if (!mounted) return;
 
     setState(() {
       _isAnalyzing = false;
     });
 
-    if (result.isRecognized) {
+    if (result['exito'] == true) {
       setState(() {
-        _detectedResult = result;
+        _detectedData = result;
         _detectionError = null;
       });
 
-      await HapticService.success();
+      await HapticFeedback.lightImpact();
       await ProgressService.registerCameraUse();
       await ProgressService.registerAudioPlay();
 
-      // Locución pedagógica del resultado
-      final message = '${result.wordEn}, en español ${result.wordEs}.';
-      SemanticsService.announce(message, TextDirection.ltr);
-      await _ttsService.speakSpanish('Objeto detectado: $message');
+      final palabra = (result['palabraIngles'] as String? ?? '').trim();
+      final traduccion = (result['traduccionEspanol'] as String? ?? '').trim();
+      final frase = (result['fraseIngles'] as String? ?? '').trim();
+      final fraseEs = (result['fraseEspanol'] as String? ?? '').trim();
 
-      if (result.exampleSentence != null && result.exampleSentence!.isNotEmpty) {
-        await Future.delayed(const Duration(milliseconds: 300));
-        await _ttsService.speakBilingual(
-          textEn: result.exampleSentence!,
-          textEs: result.exampleSentenceEs ?? '',
-        );
-      }
+      // Anuncio accesible a TalkBack
+      final anuncio = 'Objeto identificado: $palabra, en español $traduccion.';
+      SemanticsService.announce(anuncio, TextDirection.ltr);
+
+      // Locución Bilingüe Secuencial (RF-04 / RF-05)
+      await _ttsService.speakCameraRecognitionResult(
+        wordEn: palabra,
+        wordEs: traduccion,
+        sentenceEn: frase,
+        sentenceEs: fraseEs,
+      );
     } else {
-      final errorMsg = result.errorMessage ?? 'Objeto no reconocido o no disponible en el glosario A1';
+      await HapticFeedback.heavyImpact();
+
+      final bool es503 = result['esError503'] == true;
+      final bool esConexion = result['esErrorConexion'] == true;
+
+      final String errorMsg;
+      if (es503) {
+        errorMsg =
+            'Servicio de reconocimiento no disponible temporalmente. Intenta en un momento.';
+      } else if (esConexion) {
+        errorMsg = 'Se requiere conexión a internet para analizar la imagen';
+      } else {
+        final rawMsg = result['mensaje'] as String? ?? '';
+        errorMsg = rawMsg.isNotEmpty
+            ? rawMsg
+            : 'Objeto no reconocido o no disponible en el glosario A1';
+      }
+
       setState(() {
-        _detectedResult = null;
+        _detectedData = null;
         _detectionError = errorMsg;
       });
 
-      await HapticService.error();
       SemanticsService.announce(errorMsg, TextDirection.ltr);
       await _ttsService.speakSpanish(errorMsg);
     }
@@ -166,14 +250,20 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final result = _detectedResult;
+    final data = _detectedData;
     final error = _detectionError;
+
+    final String? palabraIngles = data?['palabraIngles'];
+    final String? traduccionEspanol = data?['traduccionEspanol'];
+    final String? categoria = data?['categoria'];
+    final String? fraseIngles = data?['fraseIngles'];
+    final String? fraseEspanol = data?['fraseEspanol'];
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Explorar con cámara'),
         actions: [
-          // Menú discreto para desarrolladores / emulador sin cámara
+          // Menú discreto para desarrolladores / emulador sin cámara física
           PopupMenuButton<String>(
             tooltip: 'Muestras de prueba (Emulador)',
             icon: Icon(
@@ -186,7 +276,9 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
               if (val == 'laptop') _analyzeImageBytes(_generateSampleJpg('Laptop Computer'));
               if (val == 'book') _analyzeImageBytes(_generateSampleJpg('Book'));
               if (val == 'turbine') {
-                _analyzeImageBytes(_generateSampleJpg('Complex Industrial Steam Turbine Engine'));
+                _analyzeImageBytes(
+                  _generateSampleJpg('Complex Industrial Steam Turbine Engine'),
+                );
               }
             },
             itemBuilder: (_) => const [
@@ -202,13 +294,13 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           children: [
-            // VISOR MODERNO DE CÁMARA (Estilo Escáner Futurista Lovable)
+            // VISOR MODERNO DE CÁMARA (Bordes redondeados de 24 dp según RF-03 / Estilo Lovable)
             Semantics(
               label: 'Visor de la cámara con marco de enfoque para identificar objetos.',
               child: Container(
-                height: 350,
+                height: 340,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(24),
                   color: const Color(0xFF0F172A),
                   border: Border.all(
                     color: Colors.white.withValues(alpha: 0.10),
@@ -217,8 +309,8 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                   boxShadow: [
                     BoxShadow(
                       color: AppTheme.primary.withValues(alpha: 0.12),
-                      blurRadius: 28,
-                      offset: const Offset(0, 10),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
                     ),
                   ],
                 ),
@@ -242,7 +334,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                                     ),
                                     SizedBox(height: 18),
                                     Text(
-                                      'Analizando con Gemini Flash...',
+                                      'Analizando con Gemini...',
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontSize: 16,
@@ -298,33 +390,37 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                       child: _ScannerCornerOverlay(),
                     ),
 
-                    // Overlay de análisis activo
+                    // Overlay de análisis activo con LiveRegion accesible para TalkBack
                     if (_isAnalyzing)
                       Positioned.fill(
-                        child: Container(
-                          color: const Color(0xFF0B0F19).withValues(alpha: 0.75),
-                          child: const Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 48,
-                                  height: 48,
-                                  child: CircularProgressIndicator(
-                                    color: AppTheme.primary,
-                                    strokeWidth: 3.5,
+                        child: Semantics(
+                          liveRegion: true,
+                          label: 'Capturando y analizando imagen, por favor espera...',
+                          child: Container(
+                            color: const Color(0xFF0B0F19).withValues(alpha: 0.80),
+                            child: const Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 48,
+                                    height: 48,
+                                    child: CircularProgressIndicator(
+                                      color: AppTheme.primary,
+                                      strokeWidth: 3.5,
+                                    ),
                                   ),
-                                ),
-                                SizedBox(height: 18),
-                                Text(
-                                  'Identificando objeto con Gemini Flash...',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 16,
+                                  SizedBox(height: 18),
+                                  Text(
+                                    'Identificando objeto con Gemini...',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 16,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -334,12 +430,12 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
               ),
             ),
 
-            const SizedBox(height: 22),
+            const SizedBox(height: 20),
 
-            // BOTÓN PRINCIPAL DE CAPTURA PROMINENTE CON DEGRADADO ÍNDIGO
+            // BOTÓN PRINCIPAL DE CAPTURA FLOTANTE / ERGONÓMICO (≥ 56 dp / WCAG 2.2 AA)
             Semantics(
               button: true,
-              label: 'Capturar y Analizar. Toma la foto con la cámara para identificar el objeto en inglés.',
+              label: 'Capturar foto para identificar objeto en inglés',
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
@@ -381,7 +477,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                             const Icon(
                               Icons.camera_rounded,
                               color: Colors.white,
-                              size: 24,
+                              size: 26,
                             ),
                           const SizedBox(width: 12),
                           Text(
@@ -403,11 +499,11 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
 
             const SizedBox(height: 18),
 
-            // TARJETA DE RESULTADO FLOTANTE TIPO SHEET (Estilo Lovable)
-            if (result != null)
+            // TARJETA DE RESULTADO FLOTANTE ACCESIBLE (Estilo Lovable / shadcn)
+            if (data != null && palabraIngles != null)
               Semantics(
                 label:
-                    'Objeto identificado: ${result.wordEn}, en español ${result.wordEs}. Categoría: ${result.category}. Ejemplo: ${result.exampleSentence}.',
+                    'Objeto identificado: $palabraIngles, en español $traduccionEspanol. Categoría: $categoria. Frase: $fraseIngles. Traducción: $fraseEspanol.',
                 child: Container(
                   padding: const EdgeInsets.all(22),
                   decoration: BoxDecoration(
@@ -466,7 +562,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                             tooltip: 'Cerrar resultado',
                             onPressed: () {
                               HapticService.selection();
-                              setState(() => _detectedResult = null);
+                              setState(() => _detectedData = null);
                             },
                           ),
                         ],
@@ -482,7 +578,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  result.wordEn ?? '',
+                                  palabraIngles,
                                   style: const TextStyle(
                                     fontSize: 34,
                                     fontWeight: FontWeight.w900,
@@ -492,7 +588,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '→ ${result.wordEs ?? ''}',
+                                  '→ ${traduccionEspanol ?? ''}',
                                   style: const TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
@@ -505,7 +601,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                           // Botón destacado con altavoz para repetir la pronunciación
                           Semantics(
                             button: true,
-                            label: 'Pronunciar ${result.wordEn} en inglés',
+                            label: 'Pronunciar $palabraIngles en inglés',
                             child: Container(
                               decoration: BoxDecoration(
                                 color: AppTheme.primary.withValues(alpha: 0.18),
@@ -522,7 +618,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                                 ),
                                 onPressed: () {
                                   HapticService.selection();
-                                  _ttsService.speakEnglish(result.wordEn ?? '');
+                                  _ttsService.speakEnglish(palabraIngles);
                                 },
                               ),
                             ),
@@ -530,7 +626,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                         ],
                       ),
 
-                      if (result.category != null) ...[
+                      if (categoria != null && categoria.isNotEmpty) ...[
                         const SizedBox(height: 14),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -539,7 +635,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            'Categoría: ${result.category}',
+                            'Categoría: $categoria',
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -549,8 +645,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                         ),
                       ],
 
-                      if (result.exampleSentence != null &&
-                          result.exampleSentence!.isNotEmpty) ...[
+                      if (fraseIngles != null && fraseIngles.isNotEmpty) ...[
                         const Divider(height: 28),
                         const Text(
                           'Ejemplo en contexto:',
@@ -562,7 +657,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '"${result.exampleSentence}"',
+                          '"$fraseIngles"',
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
@@ -570,28 +665,46 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                             color: Colors.white,
                           ),
                         ),
-                        if (result.exampleSentenceEs != null &&
-                            result.exampleSentenceEs!.isNotEmpty) ...[
+                        if (fraseEspanol != null && fraseEspanol.isNotEmpty) ...[
                           const SizedBox(height: 2),
                           Text(
-                            result.exampleSentenceEs!,
+                            fraseEspanol,
                             style: const TextStyle(
                               fontSize: 13,
                               color: AppTheme.textSecondary,
                             ),
                           ),
                         ],
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            HapticService.selection();
-                            _ttsService.speakBilingual(
-                              textEn: result.exampleSentence!,
-                              textEs: result.exampleSentenceEs ?? '',
-                            );
-                          },
-                          icon: const Icon(Icons.record_voice_over_rounded, size: 18),
-                          label: const Text('Escuchar ejemplo bilingüe'),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                HapticService.selection();
+                                _ttsService.speakCameraRecognitionResult(
+                                  wordEn: palabraIngles,
+                                  wordEs: traduccionEspanol ?? '',
+                                  sentenceEn: fraseIngles,
+                                  sentenceEs: fraseEspanol ?? '',
+                                );
+                              },
+                              icon: const Icon(Icons.replay_rounded, size: 18),
+                              label: const Text('Repetir locución completa'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                HapticService.selection();
+                                _ttsService.speakBilingual(
+                                  textEn: fraseIngles,
+                                  textEs: fraseEspanol ?? '',
+                                );
+                              },
+                              icon: const Icon(Icons.record_voice_over_rounded, size: 18),
+                              label: const Text('Escuchar solo ejemplo'),
+                            ),
+                          ],
                         ),
                       ],
                     ],

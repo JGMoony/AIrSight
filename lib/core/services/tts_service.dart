@@ -167,6 +167,79 @@ class TtsService {
     }
   }
 
+  /// Locución bilingüe secuencial de 5 fases para el reconocimiento visual de objetos (RF-04 / RF-05):
+  /// 1. es-ES: "Se identificó: "
+  /// 2. en-US: [palabraIngles] (velocidad clara)
+  /// 3. es-ES: ", que significa: [traduccionEspanol]. Ejemplo: "
+  /// 4. en-US: [fraseIngles]
+  /// 5. es-ES: ", traducción: [fraseEspanol]."
+  Future<void> speakCameraRecognitionResult({
+    required String wordEn,
+    required String wordEs,
+    required String sentenceEn,
+    required String sentenceEs,
+    Duration pause = const Duration(milliseconds: 300),
+    double exampleRate = bilingualExampleSpeechRate,
+  }) async {
+    final session = ++_currentSpeechSession;
+    await _ensureConfigured();
+    await _flutterTts.stop();
+
+    if (session != _currentSpeechSession) return;
+
+    try {
+      // 1. es-ES: "Se identificó: "
+      await _flutterTts.setLanguage('es-ES');
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.setSpeechRate(defaultSpeechRate);
+      await _flutterTts.speak('Se identificó: ');
+
+      if (session != _currentSpeechSession) return;
+      await Future.delayed(pause);
+      if (session != _currentSpeechSession) return;
+
+      // 2. en-US: [palabraIngles] (velocidad clara)
+      await _flutterTts.setLanguage('en-US');
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.setSpeechRate(defaultSpeechRate);
+      await _flutterTts.speak(wordEn.trim());
+
+      if (session != _currentSpeechSession) return;
+      await Future.delayed(pause);
+      if (session != _currentSpeechSession) return;
+
+      // 3. es-ES: ", que significa: [traduccionEspanol]. Ejemplo: "
+      await _flutterTts.setLanguage('es-ES');
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.setSpeechRate(defaultSpeechRate);
+      await _flutterTts.speak(', que significa: ${wordEs.trim()}. Ejemplo: ');
+
+      if (session != _currentSpeechSession) return;
+      await Future.delayed(pause);
+      if (session != _currentSpeechSession) return;
+
+      // 4. en-US: [fraseIngles]
+      await _flutterTts.setLanguage('en-US');
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.setSpeechRate(exampleRate);
+      await _flutterTts.speak(sentenceEn.trim());
+
+      if (session != _currentSpeechSession) return;
+      await Future.delayed(pause);
+      if (session != _currentSpeechSession) return;
+
+      // 5. es-ES: ", traducción: [fraseEspanol]."
+      await _flutterTts.setLanguage('es-ES');
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.setSpeechRate(exampleRate);
+      await _flutterTts.speak(', traducción: ${sentenceEs.trim()}.');
+    } finally {
+      if (session == _currentSpeechSession) {
+        await _flutterTts.setSpeechRate(defaultSpeechRate);
+      }
+    }
+  }
+
   Future<void> stop() async {
     _currentSpeechSession++;
     debugPrint('[TtsService] stop solicitado');

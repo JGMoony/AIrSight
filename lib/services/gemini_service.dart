@@ -441,17 +441,27 @@ class GeminiService {
     }
   }
 
-  /// Inferencia visual restringida: Identifica si la imagen contiene un objeto cotidiano
-  /// que pertenezca estrictamente al nivel A1 de inglés.
-  /// Si no es reconocido o no pertenece al catálogo A1, devuelve el mensaje de error controlado:
-  /// "Objeto no reconocido o no disponible en el glosario A1".
-  Future<GeminiObjectResult> identificarObjeto(
+  /// Inferencia visual multimodal restringida al glosario de objetos cotidianos A1 (IEEE 830 RF-03 / RNF-03).
+  /// Procesa imágenes en memoria como Uint8List (RNF-03) y normaliza al sustantivo más elemental de nivel A1.
+  /// Retorna un mapa canónico con la estructura:
+  /// {
+  ///   "exito": true/false,
+  ///   "palabraIngles": "...",
+  ///   "traduccionEspanol": "...",
+  ///   "categoria": "...",
+  ///   "fraseIngles": "...",
+  ///   "fraseEspanol": "...",
+  ///   "mensaje": "..." // En caso de rechazo o no disponibilidad
+  /// }
+  Future<Map<String, dynamic>> identificarObjetoA1(
     Uint8List imageBytes, {
     String? apiKey,
-    String? mimeType,
   }) async {
     if (imageBytes.isEmpty) {
-      return GeminiObjectResult.error('La imagen capturada está vacía.');
+      return {
+        'exito': false,
+        'mensaje': 'La imagen capturada está vacía.',
+      };
     }
 
     final key = apiKey ?? activeApiKey;
@@ -459,52 +469,37 @@ class GeminiService {
     if (key.isEmpty || key == 'TU_API_KEY_AQUI') {
       print('[GEMINI ERROR DETALLADO]: ApiConfig.geminiApiKey está vacía o tiene el valor por defecto ("TU_API_KEY_AQUI").');
       debugPrint('ERROR REAL GEMINI: ApiConfig.geminiApiKey está vacía o tiene el valor por defecto ("TU_API_KEY_AQUI"). Configura tu clave en lib/config/api_config.dart o con --dart-define=GEMINI_API_KEY=...');
-      return GeminiObjectResult.error('Servicio no disponible temporalmente.');
+      return {
+        'exito': false,
+        'mensaje': 'Servicio no disponible temporalmente.',
+      };
     }
 
     try {
-      const promptText = '''
-Eres un tutor de inglés y clasificador visual para estudiantes principiantes de nivel A1 en la aplicación educativa Air Sight.
+      const systemInstruction = '''
+Eres el clasificador visual del proyecto accesible AirSight para estudiantes con discapacidad visual. Tu tarea es identificar el objeto principal en la imagen y asociarlo al vocabulario básico en inglés de nivel A1 dentro de las categorías cotidianas (útiles de estudio, tecnología, objetos de uso personal, alimentos, ropa, hogar, partes del lugar, transporte, etc.).
 
-OBJETIVO:
-Analiza la imagen recibida e identifica el objeto cotidiano principal visible.
-
-REGLA ESTRICTA DE VOCABULARIO A1:
-Solo debes reconocer el objeto SI Y SOLO SI corresponde a un objeto cotidiano elemental de nivel A1 para principiantes.
-Los objetos cotidianos válidos son de uso diario común, tales como:
-- Salón de clase y estudio: bag, board, book, chair, desk, eraser, marker, notebook, pen, pencil, ruler, table, classroom, computer, laptop.
-- Casa y cocina: bed, clock, door, lamp, mirror, window, cup, fork, glass, plate, spoon, sofa, key.
-- Comida y frutas: apple, banana, bread, cheese, egg, milk, orange, rice, water.
-- Animales comunes: bird, cat, cow, dog, duck, fish, horse, lion, mouse, pig, rabbit, turtle.
-- Ropa y accesorios: boots, cap, dress, jacket, pants, shirt, shoes, skirt, socks, t-shirt.
-- Transporte y naturaleza: bicycle, bus, car, boat, train, airplane, tree, flower, sun, star.
-- Objetos personales elementales: watch, phone, bottle, hat.
-
-REGLA DE EXCLUSIÓN:
-Si la imagen:
-1. No contiene ningún objeto reconocible o está vacía/borrosa.
-2. Contiene objetos complejos, industriales, médicos, especializados, herramientas avanzadas o conceptos abstractos que NO pertenecen al vocabulario cotidiano básico de nivel A1.
-3. No es un objeto básico para un estudiante principiante.
-DEBES RETORNAR ESTRICTAMENTE:
+Reglas estrictas de respuesta:
+1. Si el objeto corresponde a un elemento cotidiano, identifícalo y simplifícalo a su término básico en nivel A1 (ejemplo: si ves un portátil Asus responde "laptop" o "computer"; si ves una silla de oficina responde "chair").
+2. Responde ÚNICAMENTE en este formato JSON válido:
 {
-  "recognized": false,
-  "error": "Objeto no reconocido o no disponible en el glosario A1"
+  "exito": true,
+  "palabraIngles": "laptop",
+  "traduccionEspanol": "computador portátil",
+  "categoria": "tecnología",
+  "fraseIngles": "The laptop is on the desk.",
+  "fraseEspanol": "El computador portátil está en el escritorio."
 }
-
-FORMATO DE ÉXITO (Si es un objeto cotidiano A1):
+3. Si la imagen es borrosa, está totalmente oscura, o el objeto NO pertenece a las categorías cotidianas de nivel A1, responde ÚNICAMENTE:
 {
-  "recognized": true,
-  "wordEn": "<palabra en inglés en minúscula, ej: chair>",
-  "wordEs": "<traducción principal en español, ej: silla>",
-  "exampleSentence": "<frase corta y simple en inglés de nivel A1 usando la palabra, ej: The chair is brown.>",
-  "exampleSentenceEs": "<traducción de la frase de ejemplo al español, ej: La silla es marrón.>",
-  "category": "<categoría como Classroom, Home, Food, Animals, Clothes, etc.>"
+  "exito": false,
+  "mensaje": "Objeto no reconocido o no disponible en el glosario A1"
 }
 ''';
 
       final content = [
         Content.multi([
-          TextPart(promptText),
+          TextPart('$systemInstruction\nIdentifica el objeto principal de la imagen:'),
           DataPart('image/jpeg', imageBytes),
         ]),
       ];
@@ -513,70 +508,139 @@ FORMATO DE ÉXITO (Si es un objeto cotidiano A1):
         content: content,
         apiKey: key,
         generationConfig: GenerationConfig(
-          temperature: 0.1,
+          temperature: 0.2,
           maxOutputTokens: 120,
           responseMimeType: 'application/json',
         ),
       );
-      final rawText = response.text;
 
+      final rawText = response.text;
       if (rawText == null || rawText.trim().isEmpty) {
-        return GeminiObjectResult.error(
-          'Objeto no reconocido o no disponible en el glosario A1',
-        );
+        return {
+          'exito': false,
+          'mensaje': 'Objeto no reconocido o no disponible en el glosario A1',
+        };
       }
 
       final jsonMap = _parseJsonResponse(rawText);
-      final isRecognized = jsonMap['recognized'] == true;
+      final bool exito = (jsonMap['exito'] == true) ||
+          (jsonMap['recognized'] == true && jsonMap['exito'] != false);
 
-      if (!isRecognized) {
-        final errorMsg = (jsonMap['error'] as String?)?.isNotEmpty == true
-            ? jsonMap['error'] as String
-            : 'Objeto no reconocido o no disponible en el glosario A1';
-        return GeminiObjectResult.error(errorMsg);
+      if (!exito) {
+        final errorMsg = (jsonMap['mensaje'] as String? ??
+                jsonMap['error'] as String? ??
+                'Objeto no reconocido o no disponible en el glosario A1')
+            .trim();
+        return {
+          'exito': false,
+          'mensaje': errorMsg.isNotEmpty
+              ? errorMsg
+              : 'Objeto no reconocido o no disponible en el glosario A1',
+        };
       }
 
-      final wordEn = (jsonMap['wordEn'] as String? ?? '').trim().toLowerCase();
-      final wordEs = (jsonMap['wordEs'] as String? ?? '').trim().toLowerCase();
-      final exampleSentence = (jsonMap['exampleSentence'] as String? ?? '').trim();
-      final exampleSentenceEs = (jsonMap['exampleSentenceEs'] as String? ?? '').trim();
-      final category = (jsonMap['category'] as String? ?? 'Objetos cotidianos').trim();
+      final palabraIngles = (jsonMap['palabraIngles'] as String? ??
+              jsonMap['wordEn'] as String? ??
+              '')
+          .trim()
+          .toLowerCase();
+      final traduccionEspanol = (jsonMap['traduccionEspanol'] as String? ??
+              jsonMap['wordEs'] as String? ??
+              '')
+          .trim()
+          .toLowerCase();
+      final categoria = (jsonMap['categoria'] as String? ??
+              jsonMap['category'] as String? ??
+              'Objetos cotidianos')
+          .trim();
+      final fraseIngles = (jsonMap['fraseIngles'] as String? ??
+              jsonMap['exampleSentence'] as String? ??
+              'This is a $palabraIngles.')
+          .trim();
+      final fraseEspanol = (jsonMap['fraseEspanol'] as String? ??
+              jsonMap['exampleSentenceEs'] as String? ??
+              'Esto es un/a $traduccionEspanol.')
+          .trim();
 
-      if (wordEn.isEmpty || wordEs.isEmpty) {
-        return GeminiObjectResult.error(
-          'Objeto no reconocido o no disponible en el glosario A1',
-        );
+      if (palabraIngles.isEmpty || traduccionEspanol.isEmpty) {
+        return {
+          'exito': false,
+          'mensaje': 'Objeto no reconocido o no disponible en el glosario A1',
+        };
       }
 
-      return GeminiObjectResult.success(
-        wordEn: wordEn,
-        wordEs: wordEs,
-        exampleSentence: exampleSentence.isNotEmpty
-            ? exampleSentence
-            : 'This is a $wordEn.',
-        exampleSentenceEs: exampleSentenceEs.isNotEmpty
-            ? exampleSentenceEs
-            : 'Esto es un/a $wordEs.',
-        category: category,
-      );
+      return {
+        'exito': true,
+        'palabraIngles': palabraIngles,
+        'traduccionEspanol': traduccionEspanol,
+        'categoria': categoria,
+        'fraseIngles': fraseIngles,
+        'fraseEspanol': fraseEspanol,
+      };
     } on SocketException catch (e) {
       print('[GEMINI ERROR DETALLADO]: Conexión fallida: $e');
       debugPrint('ERROR REAL GEMINI: Conexión fallida: $e');
-      return GeminiObjectResult.error(
-        'Sin conexión a internet. Verifica tu conexión de red.',
-      );
+      return {
+        'exito': false,
+        'mensaje': 'Sin conexión a internet. Verifica tu conexión de red.',
+        'esErrorConexion': true,
+      };
     } catch (e) {
       print('[GEMINI ERROR DETALLADO]: ${e.toString()}');
       debugPrint('ERROR REAL GEMINI: $e');
       final msg = _formatErrorMessage(e);
+      final errorLower = e.toString().toLowerCase();
+
       if (msg.contains('SocketException') || msg.contains('Failed host lookup')) {
-        return GeminiObjectResult.error('Sin conexión a internet. Verifica tu conexión de red.');
+        return {
+          'exito': false,
+          'mensaje': 'Sin conexión a internet. Verifica tu conexión de red.',
+          'esErrorConexion': true,
+        };
       }
+
+      if (errorLower.contains('503') ||
+          errorLower.contains('unavailable') ||
+          errorLower.contains('high demand')) {
+        return {
+          'exito': false,
+          'mensaje': 'Servicio de reconocimiento no disponible temporalmente. Intenta en un momento.',
+          'esError503': true,
+        };
+      }
+
       if (msg.contains('API_KEY_INVALID') || msg.contains('403') || msg.contains('401')) {
-        return GeminiObjectResult.error('Servicio no disponible temporalmente.');
+        return {
+          'exito': false,
+          'mensaje': 'Servicio no disponible temporalmente.',
+        };
       }
+
+      return {
+        'exito': false,
+        'mensaje': 'Objeto no reconocido o no disponible en el glosario A1',
+      };
+    }
+  }
+
+  /// Adaptador de compatibilidad para código y pruebas existentes
+  Future<GeminiObjectResult> identificarObjeto(
+    Uint8List imageBytes, {
+    String? apiKey,
+    String? mimeType,
+  }) async {
+    final result = await identificarObjetoA1(imageBytes, apiKey: apiKey);
+    if (result['exito'] == true) {
+      return GeminiObjectResult.success(
+        wordEn: result['palabraIngles'] ?? '',
+        wordEs: result['traduccionEspanol'] ?? '',
+        exampleSentence: result['fraseIngles'] ?? '',
+        exampleSentenceEs: result['fraseEspanol'],
+        category: result['categoria'],
+      );
+    } else {
       return GeminiObjectResult.error(
-        'Objeto no reconocido o no disponible en el glosario A1',
+        result['mensaje'] ?? 'Objeto no reconocido o no disponible en el glosario A1',
       );
     }
   }

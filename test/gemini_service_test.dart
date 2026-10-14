@@ -72,6 +72,30 @@ void main() {
       service.setApiKey('');
     });
 
+    test('identificarObjetoA1 valida bytes vacíos de imagen', () async {
+      final service = GeminiService.instance;
+      service.setApiKey('AIzaSyTestKey');
+
+      final result = await service.identificarObjetoA1(Uint8List(0));
+      expect(result['exito'], isFalse);
+      expect(result['mensaje'], contains('vacía'));
+
+      service.setApiKey('');
+    });
+
+    test('identificarObjetoA1 retorna error amigable cuando la clave no está configurada', () async {
+      final service = GeminiService.instance;
+      service.setApiKey('TU_API_KEY_AQUI');
+
+      final dummyBytes = Uint8List.fromList([1, 2, 3, 4]);
+      final result = await service.identificarObjetoA1(dummyBytes);
+
+      expect(result['exito'], isFalse);
+      expect(result['mensaje'], equals('Servicio no disponible temporalmente.'));
+
+      service.setApiKey('');
+    });
+
     test('GeminiObjectResult modela éxito y error controlado conforme a especificación A1', () {
       final success = GeminiObjectResult.success(
         wordEn: 'chair',
