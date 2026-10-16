@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
+import 'package:flutter/semantics.dart';
 
 import '../../services/auth_feedback_service.dart';
 import '../../services/auth_service.dart';
@@ -29,6 +29,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
+  /// Emite un anuncio semántico accesible para lectores de pantalla TalkBack (WCAG 2.2 AA).
+  void _announce(String message) {
+    // ignore: deprecated_member_use
+    SemanticsService.announce(message, TextDirection.ltr);
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -43,10 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _register() async {
     // Si la validación falla, se anuncia verbalmente a TalkBack
     if (!_formKey.currentState!.validate()) {
-      SemanticsService.announce(
-        'El formulario contiene errores. Por favor revisa los campos señalados.',
-        TextDirection.ltr,
-      );
+      _announce('El formulario contiene errores. Por favor revisa los campos señalados.');
       return;
     }
 
@@ -75,7 +78,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       final errorMessage = AuthService.getFriendlyErrorMessage(e);
 
-      SemanticsService.announce(errorMessage, TextDirection.ltr);
+      _announce(errorMessage);
       _ttsService.speakSpanish(errorMessage);
 
       messenger.showSnackBar(
@@ -89,7 +92,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       debugPrint('Error inesperado al registrar usuario: $e');
       const genericError =
           'No se pudo completar el registro. Verifica tu conexión a internet.';
-      SemanticsService.announce(genericError, TextDirection.ltr);
+      _announce(genericError);
       _ttsService.speakSpanish(genericError);
 
       messenger.showSnackBar(
@@ -132,7 +135,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       final msg = AuthService.getFriendlyErrorMessage(e);
-      SemanticsService.announce(msg, TextDirection.ltr);
+      _announce(msg);
       _ttsService.speakSpanish(msg);
       messenger.showSnackBar(
         SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
@@ -141,7 +144,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       debugPrint('Error en registro con Google: $e');
       const msg = 'No se pudo completar el registro con Google. Intenta nuevamente.';
-      SemanticsService.announce(msg, TextDirection.ltr);
+      _announce(msg);
       _ttsService.speakSpanish(msg);
       messenger.showSnackBar(
         const SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),

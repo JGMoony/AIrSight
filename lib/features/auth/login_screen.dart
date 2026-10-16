@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
+import 'package:flutter/semantics.dart';
 
 import '../../services/auth_feedback_service.dart';
 import '../../services/auth_service.dart';
@@ -25,6 +25,12 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoadingGoogle = false;
   bool _obscurePassword = true;
 
+  /// Emite un anuncio semántico accesible para lectores de pantalla TalkBack (WCAG 2.2 AA).
+  void _announce(String message) {
+    // ignore: deprecated_member_use
+    SemanticsService.announce(message, TextDirection.ltr);
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -36,10 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) {
-      SemanticsService.announce(
-        'El formulario contiene errores. Por favor verifica los campos.',
-        TextDirection.ltr,
-      );
+      _announce('El formulario contiene errores. Por favor verifica los campos.');
       return;
     }
 
@@ -65,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       final errorMessage = AuthService.getFriendlyErrorMessage(e);
 
-      SemanticsService.announce(errorMessage, TextDirection.ltr);
+      _announce(errorMessage);
       await _ttsService.speakSpanish(errorMessage);
 
       messenger.showSnackBar(
@@ -78,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       const genericError =
           'Error al conectar con el servidor de autenticación. Verifica tu red.';
-      SemanticsService.announce(genericError, TextDirection.ltr);
+      _announce(genericError);
       await _ttsService.speakSpanish(genericError);
 
       messenger.showSnackBar(
@@ -122,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       final errorMessage = AuthService.getFriendlyErrorMessage(e);
 
-      SemanticsService.announce(errorMessage, TextDirection.ltr);
+      _announce(errorMessage);
       await _ttsService.speakSpanish(errorMessage);
 
       messenger.showSnackBar(
@@ -135,7 +138,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       const genericError =
           'No se pudo completar el inicio de sesión con Google. Intenta nuevamente.';
-      SemanticsService.announce(genericError, TextDirection.ltr);
+      _announce(genericError);
 
       messenger.showSnackBar(
         const SnackBar(
@@ -199,10 +202,7 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: () async {
                 final email = resetEmailController.text.trim();
                 if (email.isEmpty || !emailRegex.hasMatch(email)) {
-                  SemanticsService.announce(
-                    'Ingresa un correo electrónico válido.',
-                    TextDirection.ltr,
-                  );
+                  _announce('Ingresa un correo electrónico válido.');
                   return;
                 }
 
@@ -214,7 +214,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   final message =
                       'Se han enviado las instrucciones de restablecimiento a $email.';
-                  SemanticsService.announce(message, TextDirection.ltr);
+                  _announce(message);
                   await _ttsService.speakSpanish(message);
 
                   if (!mounted) return;
@@ -226,7 +226,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   );
                 } on FirebaseAuthException catch (e) {
                   final errorMsg = AuthService.getFriendlyErrorMessage(e);
-                  SemanticsService.announce(errorMsg, TextDirection.ltr);
+                  _announce(errorMsg);
                   await _ttsService.speakSpanish(errorMsg);
 
                   if (!mounted) return;

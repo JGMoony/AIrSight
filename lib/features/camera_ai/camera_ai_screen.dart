@@ -1,10 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/semantics.dart';
 
 import '../../services/haptic_service.dart';
 import '../../services/progress_service.dart';
@@ -79,6 +78,12 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
     }
   }
 
+  /// Emite un anuncio semántico accesible para lectores de pantalla TalkBack (WCAG 2.2 AA).
+  void _announce(String message) {
+    // ignore: deprecated_member_use
+    SemanticsService.announce(message, TextDirection.ltr);
+  }
+
   /// Captura un fotograma de la cámara real y lo envía a Gemini 
   Future<void> _captureFromCamera() async {
     if (_isAnalyzing) return;
@@ -88,7 +93,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
       await _initCamera();
       if (_cameraController == null || !_cameraController!.value.isInitialized) {
         const msg = 'La cámara no está disponible o no se han concedido permisos.';
-        SemanticsService.announce(msg, TextDirection.ltr);
+        _announce(msg);
         await _ttsService.speakSpanish(msg);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -104,7 +109,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
     if (!conectado) {
       await HapticService.error();
       const msg = 'Se requiere conexión a internet para utilizar este servicio';
-      SemanticsService.announce(msg, TextDirection.ltr);
+      _announce(msg);
       await _ttsService.speakSpanish(msg);
       if (mounted) {
         setState(() {
@@ -120,10 +125,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
 
     // 3. Retroalimentación Inmediata (< 400ms) (RNF-01 / Sec 3.2.3)
     await HapticService.buttonPress();
-    SemanticsService.announce(
-      'Capturando y analizando imagen, por favor espera...',
-      TextDirection.ltr,
-    );
+    _announce('Capturando y analizando imagen, por favor espera...');
 
     setState(() {
       _isAnalyzing = true;
@@ -162,10 +164,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
         _detectedData = null;
         _detectionError = null;
       });
-      SemanticsService.announce(
-        'Capturando y analizando imagen, por favor espera...',
-        TextDirection.ltr,
-      );
+      _announce('Capturando y analizando imagen, por favor espera...');
     }
 
     final result = await GeminiService.instance.identificarObjetoA1(bytes);
@@ -192,7 +191,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
 
       // Anuncio accesible a TalkBack
       final anuncio = 'Objeto identificado: $palabra, en español $traduccion.';
-      SemanticsService.announce(anuncio, TextDirection.ltr);
+      _announce(anuncio);
 
       // Locución Bilingüe Secuencial (RF-04 / RF-05)
       await _ttsService.speakCameraRecognitionResult(
@@ -225,7 +224,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
         _detectionError = errorMsg;
       });
 
-      SemanticsService.announce(errorMsg, TextDirection.ltr);
+      _announce(errorMsg);
       await _ttsService.speakSpanish(errorMsg);
     }
   }

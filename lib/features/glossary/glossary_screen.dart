@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
+import 'package:flutter/semantics.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/haptic_service.dart';
@@ -34,6 +34,12 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
   bool _isListening = false;
   String searchText = '';
   String selectedCategory = 'Todas';
+
+  /// Emite un anuncio semántico accesible para lectores de pantalla TalkBack (WCAG 2.2 AA).
+  void _announce(String message) {
+    // ignore: deprecated_member_use
+    SemanticsService.announce(message, TextDirection.ltr);
+  }
 
   @override
   void initState() {
@@ -144,10 +150,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
         setState(() {
           _isListening = false;
         });
-        SemanticsService.announce(
-          'No se detectó audio del micrófono.',
-          TextDirection.ltr,
-        );
+        _announce('No se detectó audio del micrófono.');
       },
     );
 
@@ -155,9 +158,8 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
       setState(() {
         _isListening = true;
       });
-      SemanticsService.announce(
+      _announce(
         'Micrófono activado. Di una palabra clave para buscar en el glosario.',
-        TextDirection.ltr,
       );
     } else {
       if (!mounted) return;
@@ -177,12 +179,12 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
       // Criterio de aceptación IEEE 830 HU-06:
       const notFoundMessage =
           'La palabra no se encuentra disponible en el glosario A1.';
-      SemanticsService.announce(notFoundMessage, TextDirection.ltr);
+      _announce(notFoundMessage);
       await _ttsService.speakSpanish(notFoundMessage);
     } else {
       final foundMessage =
           'Se encontraron ${results.length} coincidencias para "$cleanQuery".';
-      SemanticsService.announce(foundMessage, TextDirection.ltr);
+      _announce(foundMessage);
       await _ttsService.speakSpanish(foundMessage);
     }
   }
@@ -358,7 +360,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                     Navigator.pop(ctx);
                     await GlossaryRepository.resetToDefault();
                     await _loadWords();
-                    SemanticsService.announce('Catálogo restaurado a valores base.', TextDirection.ltr);
+                    _announce('Catálogo restaurado a valores base.');
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Catálogo restaurado a las 102 palabras originales.')),
@@ -463,7 +465,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                 await GlossaryRepository.addWord(newWord);
                 await _loadWords();
 
-                SemanticsService.announce('Palabra agregada exitosamente.', TextDirection.ltr);
+                _announce('Palabra agregada exitosamente.');
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Palabra "${newWord.wordEn}" guardada.')),
@@ -549,9 +551,8 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                   searchText = '';
                   _searchController.clear();
                 });
-                SemanticsService.announce(
+                _announce(
                   'Búsqueda borrada. Mostrando todas las categorías.',
-                  TextDirection.ltr,
                 );
               },
             ),

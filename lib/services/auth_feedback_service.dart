@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
+import 'package:flutter/semantics.dart';
 
 import 'tts_service.dart';
 
@@ -50,6 +50,7 @@ class AuthFeedbackService {
     debugPrint('[AuthFeedbackService] Disparando feedback: "$message"');
 
     // 1. Accesibilidad para TalkBack / lectores de pantalla
+    // ignore: deprecated_member_use
     SemanticsService.announce(message, TextDirection.ltr);
 
     // 2. Audio TTS en español (no bloqueante, mediante singleton global)

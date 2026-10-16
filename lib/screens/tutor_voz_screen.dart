@@ -72,6 +72,12 @@ class _TutorVozScreenState extends State<TutorVozScreen>
     }
   }
 
+  /// Emite un anuncio semántico accesible para lectores de pantalla TalkBack (WCAG 2.2 AA).
+  void _announce(String message) {
+    // ignore: deprecated_member_use
+    SemanticsService.announce(message, TextDirection.ltr);
+  }
+
   Future<void> _toggleListening() async {
     HapticService.buttonPress();
 
@@ -82,7 +88,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
       setState(() {
         _isListening = false;
       });
-      SemanticsService.announce('Micrófono detenido.', TextDirection.ltr);
+      _announce('Micrófono detenido.');
       return;
     }
 
@@ -113,10 +119,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
           _isListening = false;
           _errorMessage = 'No se detectó audio o hubo un error con el micrófono.';
         });
-        SemanticsService.announce(
-          'No se detectó audio del micrófono.',
-          TextDirection.ltr,
-        );
+        _announce('No se detectó audio del micrófono.');
       },
     );
 
@@ -125,10 +128,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
       setState(() {
         _isListening = true;
       });
-      SemanticsService.announce(
-        'Micrófono activado. Haz tu pregunta en voz alta.',
-        TextDirection.ltr,
-      );
+      _announce('Micrófono activado. Haz tu pregunta en voz alta.');
     } else {
       _pulseController.stop();
       _pulseController.reset();
@@ -155,7 +155,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
         _isConsulting = false;
         _errorMessage = error;
       });
-      SemanticsService.announce(error, TextDirection.ltr);
+      _announce(error);
       await _ttsService.speakSpanish(error);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -170,10 +170,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
 
     // Retroalimentación inmediata WCAG 2.2 AA (< 400 ms) (RNF-01 / Sec 3.2.3)
     HapticService.buttonPress();
-    SemanticsService.announce(
-      'Consultando tutor con inteligencia artificial, por favor espera...',
-      TextDirection.ltr,
-    );
+    _announce('Consultando tutor con inteligencia artificial, por favor espera...');
 
     setState(() {
       _isConsulting = true;
@@ -196,10 +193,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
         ProgressService.registerAudioPlay();
 
         final term = result.wordOrTerm ?? cleanQuery;
-        SemanticsService.announce(
-          'Respuesta del tutor para $term: ${result.translation}. Reproduciendo audio.',
-          TextDirection.ltr,
-        );
+        _announce('Respuesta del tutor para $term: ${result.translation}. Reproduciendo audio.');
 
         // Reproducción pedagógica condicionada por intención (RF-11)
         if (result.intent == VoiceQueryIntent.howToPronounce) {
@@ -231,7 +225,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
         });
         HapticService.error();
 
-        SemanticsService.announce(error, TextDirection.ltr);
+        _announce(error);
         await _ttsService.speakSpanish(error);
 
         if (mounted) {
@@ -252,7 +246,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
       });
       HapticService.error();
 
-      SemanticsService.announce(error, TextDirection.ltr);
+      _announce(error);
       await _ttsService.speakSpanish(error);
 
       if (mounted) {
