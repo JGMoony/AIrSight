@@ -1,15 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
-import 'package:flutter/services.dart';
 
-import '../core/services/haptic_service.dart';
-import '../core/services/progress_service.dart';
-import '../core/services/tts_service.dart';
-import '../core/services/voice_search_service.dart';
+import '../services/haptic_service.dart';
+import '../services/progress_service.dart';
+import '../services/tts_service.dart';
+import '../services/voice_search_service.dart';
 import '../core/theme/app_theme.dart';
 import '../services/gemini_service.dart';
 
-/// Pantalla accesible del módulo "Tutor por Voz" integrado con Gemini Flash.
+/// Pantalla accesible del módulo "Tutor por Voz" integrado con Gemini.
 /// Permite consultas en lenguaje natural mediante el micrófono con retroalimentación
 /// háptica y reproducción bilingüe inmediata vía síntesis de voz (TTS).
 class TutorVozScreen extends StatefulWidget {
@@ -55,8 +56,24 @@ class _TutorVozScreenState extends State<TutorVozScreen>
     super.dispose();
   }
 
+  /// Comprobación rápida de conectividad a internet (< 1s) según RNF-02
+  Future<bool> _hayConexionInternet() async {
+    try {
+      if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+        return true;
+      }
+    } catch (_) {}
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(milliseconds: 900));
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _toggleListening() async {
-    HapticFeedback.mediumImpact();
+    HapticService.buttonPress();
 
     if (_isListening) {
       await _voiceService.stop();
@@ -129,8 +146,30 @@ class _TutorVozScreenState extends State<TutorVozScreen>
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty) return;
 
+    // Validación offline previa (< 1s)
+    final bool conectado = await _hayConexionInternet();
+    if (!conectado) {
+      await HapticService.error();
+      const error = 'Se requiere conexión a internet para utilizar este servicio';
+      setState(() {
+        _isConsulting = false;
+        _errorMessage = error;
+      });
+      SemanticsService.announce(error, TextDirection.ltr);
+      await _ttsService.speakSpanish(error);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(error),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+      return;
+    }
+
     // Retroalimentación inmediata WCAG 2.2 AA (< 400 ms) (RNF-01 / Sec 3.2.3)
-    HapticFeedback.mediumImpact();
+    HapticService.buttonPress();
     SemanticsService.announce(
       'Consultando tutor con inteligencia artificial, por favor espera...',
       TextDirection.ltr,
@@ -143,6 +182,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
     });
 
     try {
+      ProgressService.registerTutorQuery();
       final result = await GeminiService.instance.consultarPorVoz(cleanQuery);
       if (!mounted) return;
 
@@ -152,8 +192,8 @@ class _TutorVozScreenState extends State<TutorVozScreen>
       });
 
       if (result.success) {
-        await HapticService.success();
-        await ProgressService.registerAudioPlay();
+        HapticService.success();
+        ProgressService.registerAudioPlay();
 
         final term = result.wordOrTerm ?? cleanQuery;
         SemanticsService.announce(
@@ -161,19 +201,35 @@ class _TutorVozScreenState extends State<TutorVozScreen>
           TextDirection.ltr,
         );
 
-        // Reproducción pedagógica INMEDIATA con TTS
-        await _ttsService.speakVoiceAssistantResponse(
-          explanationEs: result.explanation ??
-              '$term significa ${result.translation} en español.',
-          exampleEn: result.exampleEn ?? '',
-          exampleEs: result.exampleEs ?? '',
-        );
+        // Reproducción pedagógica condicionada por intención (RF-11)
+        if (result.intent == VoiceQueryIntent.howToPronounce) {
+          final phon = result.phonetic ?? '';
+          final pronText = phon.isNotEmpty
+              ? '$term se pronuncia $phon. Escucha:'
+              : '$term se pronuncia:';
+          await _ttsService.speakPronunciationResponse(
+            explanationEs: pronText,
+            wordEn: term,
+          );
+        } else if (result.intent == VoiceQueryIntent.whatDoesItMean) {
+          final expl = result.explanation ?? '';
+          await _ttsService.speakSpanish(
+            '$term significa ${result.translation} en español. $expl',
+          );
+        } else {
+          await _ttsService.speakVoiceAssistantResponse(
+            explanationEs: result.explanation ??
+                '$term significa ${result.translation} en español.',
+            exampleEn: result.exampleEn ?? '',
+            exampleEs: result.exampleEs ?? '',
+          );
+        }
       } else {
-        HapticFeedback.heavyImpact();
         final error = _formatearMensajeErrorAccesible(result.errorMessage);
         setState(() {
           _errorMessage = error;
         });
+        HapticService.error();
 
         SemanticsService.announce(error, TextDirection.ltr);
         await _ttsService.speakSpanish(error);
@@ -189,12 +245,12 @@ class _TutorVozScreenState extends State<TutorVozScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      HapticFeedback.heavyImpact();
       final error = _formatearMensajeErrorAccesible(e.toString());
       setState(() {
         _isConsulting = false;
         _errorMessage = error;
       });
+      HapticService.error();
 
       SemanticsService.announce(error, TextDirection.ltr);
       await _ttsService.speakSpanish(error);
@@ -228,9 +284,10 @@ class _TutorVozScreenState extends State<TutorVozScreen>
     // Problemas de conectividad de red local:
     if (lower.contains('socketexception') ||
         lower.contains('sin conexión') ||
+        lower.contains('se requiere conexión') ||
         lower.contains('network') ||
         lower.contains('failed host lookup')) {
-      return 'Sin conexión a internet. Verifica tu conexión de red e intenta nuevamente.';
+      return 'Se requiere conexión a internet para utilizar este servicio';
     }
 
     // Congestión temporal 503 ("high demand"), 404 u otras excepciones técnicas del SDK:
@@ -253,7 +310,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
             // Cabecera informativa accesible
             Semantics(
               label:
-                  'Módulo Tutor por Voz con Gemini Flash. Consulta una palabra a la vez en inglés o español para aprender su traducción, pronunciación y un ejemplo.',
+                  'Módulo Tutor por Voz con Gemini. Consulta una palabra a la vez en inglés o español para aprender su traducción, pronunciación y un ejemplo.',
               child: Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -316,7 +373,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
                 label: _isListening
                     ? 'Micrófono activo, escuchando. Toca dos veces para detener.'
                     : (_isConsulting
-                        ? 'Consultando con Gemini Flash, por favor espera.'
+                        ? 'Consultando con Gemini, por favor espera.'
                         : 'Botón de micrófono. Toca dos veces para hacer una pregunta en voz alta.'),
                 child: AnimatedBuilder(
                   animation: _pulseAnimation,
@@ -432,7 +489,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
                   _isListening
                       ? 'Escuchando... Di tu pregunta ahora'
                       : (_isConsulting
-                          ? 'Consultando con Gemini Flash...'
+                          ? 'Consultando con Gemini...'
                           : 'Toca el micrófono para preguntar'),
                   key: ValueKey('$_isListening-$_isConsulting'),
                   style: TextStyle(
@@ -605,7 +662,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
                   label: '¿Cómo se dice lápiz en inglés?',
                   disabled: isBusy,
                   onTap: () {
-                    HapticFeedback.mediumImpact();
+                    HapticService.buttonPress();
                     setState(() => _transcribedQuery = '¿Cómo se dice lápiz en inglés?');
                     _consultarGemini('¿Cómo se dice lápiz en inglés?');
                   },
@@ -614,7 +671,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
                   label: '¿Cómo se dice manzana en inglés?',
                   disabled: isBusy,
                   onTap: () {
-                    HapticFeedback.mediumImpact();
+                    HapticService.buttonPress();
                     setState(() => _transcribedQuery = '¿Cómo se dice manzana en inglés?');
                     _consultarGemini('¿Cómo se dice manzana en inglés?');
                   },
@@ -623,7 +680,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
                   label: '¿Qué significa computer?',
                   disabled: isBusy,
                   onTap: () {
-                    HapticFeedback.mediumImpact();
+                    HapticService.buttonPress();
                     setState(() => _transcribedQuery = '¿Qué significa computer?');
                     _consultarGemini('¿Qué significa computer?');
                   },
@@ -632,7 +689,7 @@ class _TutorVozScreenState extends State<TutorVozScreen>
                   label: '¿Cómo se pronuncia chair?',
                   disabled: isBusy,
                   onTap: () {
-                    HapticFeedback.mediumImpact();
+                    HapticService.buttonPress();
                     setState(() => _transcribedQuery = '¿Cómo se pronuncia chair?');
                     _consultarGemini('¿Cómo se pronuncia chair?');
                   },

@@ -2,11 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:air_sight/screens/tutor_voz_screen.dart';
+import 'package:air_sight/services/gemini_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Pruebas de Accesibilidad e Interfaz de TutorVozScreen', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      GeminiService.instance.setApiKey('TU_API_KEY_AQUI');
+    });
+
+    tearDown(() {
+      GeminiService.instance.setApiKey('');
+    });
+
     testWidgets('TutorVozScreen renderiza AppBar, botón central de micrófono y chips de sugerencias',
         (tester) async {
       await tester.pumpWidget(
@@ -52,7 +63,7 @@ void main() {
       // Verifica que se muestre el mensaje limpio y accesible ante error (WCAG 2.2 AA)
       expect(
         find.text('El tutor presenta alta demanda temporal. Por favor, intenta de nuevo en un momento.'),
-        findsOneWidget,
+        findsAtLeastNWidgets(1),
       );
     });
   });

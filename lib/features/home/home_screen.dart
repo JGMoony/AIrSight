@@ -1,6 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../services/haptic_service.dart';
+import '../../services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../services/firestore_service.dart';
 import '../camera_ai/camera_ai_screen.dart';
 import '../glossary/glossary_screen.dart';
 import '../practice/practice_screen.dart';
@@ -8,47 +12,96 @@ import '../profile/profile_screen.dart';
 import '../progress/progress_screen.dart';
 import '../../screens/tutor_voz_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  /// Permite reiniciar la bandera de bienvenida al cerrar sesión
+  static bool hasAnnouncedWelcome = false;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final TtsService _ttsService = TtsService();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndAnnounceWelcome();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ttsService.stop();
+    super.dispose();
+  }
+
+  Future<void> _checkAndAnnounceWelcome() async {
+    if (HomeScreen.hasAnnouncedWelcome) return;
+    HomeScreen.hasAnnouncedWelcome = true;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    String studentName = user.displayName?.trim() ?? '';
+    if (studentName.isEmpty) {
+      try {
+        final profile = await FirestoreService.instance.getUser(user.uid);
+        if (profile != null && profile.nombre.trim().isNotEmpty) {
+          studentName = profile.nombre.trim();
+        }
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+
+    if (studentName.isNotEmpty) {
+      await _ttsService.speakSpanish('Bienvenido de nuevo, $studentName.');
+    } else {
+      await _ttsService.speakSpanish('Bienvenido de nuevo.');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final menuItems = [
       _MenuItemData(
         title: 'Glosario',
-        subtitle: 'Consulta vocabulario A1 con audio nativo',
+        subtitle: 'Explora palabras en inglés con su pronunciación y ejemplos.',
         icon: Icons.menu_book_rounded,
-        badgeText: '102 Palabras',
         accentColor: const Color(0xFF6366F1),
         destination: const GlossaryScreen(),
       ),
       _MenuItemData(
         title: 'Tutor por voz',
-        subtitle: 'Pregunta en español y aprende con Gemini Flash',
+        subtitle: 'Pregunta cómo se dice o pronuncia cualquier palabra.',
         icon: Icons.record_voice_over_rounded,
         badgeText: 'IA Conversacional',
         accentColor: const Color(0xFF8B5CF6),
         destination: const TutorVozScreen(),
       ),
       _MenuItemData(
-        title: 'Práctica auditiva',
-        subtitle: 'Escucha y responde microlecciones guiadas',
+        title: 'Prácticas guiadas',
+        subtitle: 'Juegos cortos para entrenar tu oído y reforzar lo aprendido.',
         icon: Icons.quiz_rounded,
-        badgeText: 'Microlearning',
+        badgeText: 'Actividades',
         accentColor: const Color(0xFF10B981),
         destination: const PracticeScreen(),
       ),
       _MenuItemData(
         title: 'Explorar con cámara',
-        subtitle: 'Detecta objetos cotidianos A1 en tiempo real',
+        subtitle: 'Apunta a objetos a tu alrededor para conocer su nombre en inglés.',
         icon: Icons.camera_alt_rounded,
         badgeText: 'Visión IA',
         accentColor: const Color(0xFF06B6D4),
         destination: const CameraAiScreen(),
       ),
       _MenuItemData(
-        title: 'Progreso y métricas',
-        subtitle: 'Palabras aprendidas, audios y aciertos',
+        title: 'Mi progreso',
+        subtitle: 'Revisa tus logros, aciertos y actividades completadas.',
         icon: Icons.bar_chart_rounded,
         badgeText: 'Estadísticas',
         accentColor: const Color(0xFFF59E0B),
@@ -56,7 +109,7 @@ class HomeScreen extends StatelessWidget {
       ),
       _MenuItemData(
         title: 'Perfil y accesibilidad',
-        subtitle: 'Ajustes de TTS, velocidad y preferencias',
+        subtitle: 'Ajustes de voz, velocidad y preferencias',
         icon: Icons.person_rounded,
         accentColor: const Color(0xFF64748B),
         destination: const ProfileScreen(),
@@ -86,87 +139,70 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          children: [
-            // Cabecera Principal Estilo Lovable Hero Banner
-            Semantics(
-              label:
-                  'Bienvenida a Air Sight. Nivel A uno. Tutor IA Activo. Aprende inglés escuchando tu entorno con visión artificial y síntesis de voz.',
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF1E1B4B), // Deep indigo
-                      Color(0xFF0F172A), // Slate
-                    ],
-                  ),
-                  border: Border.all(
-                    color: AppTheme.primary.withValues(alpha: 0.35),
-                    width: 1.2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primary.withValues(alpha: 0.15),
-                      blurRadius: 24,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Badges informativos estilo Lovable
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _StatusBadge(
-                          icon: Icons.school_rounded,
-                          label: 'Nivel A1',
-                          backgroundColor: AppTheme.primary.withValues(alpha: 0.22),
-                          textColor: const Color(0xFFA5B4FC),
-                          borderColor: AppTheme.primary.withValues(alpha: 0.4),
-                        ),
-                        _StatusBadge(
-                          icon: Icons.bolt_rounded,
-                          label: 'Tutor IA Activo',
-                          backgroundColor: AppTheme.secondary.withValues(alpha: 0.18),
-                          textColor: const Color(0xFF6EE7B7),
-                          borderColor: AppTheme.secondary.withValues(alpha: 0.35),
-                        ),
+        child: Listener(
+          onPointerDown: (_) => _ttsService.stop(),
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            children: [
+              // Cabecera Principal Accesible con Alto Contraste (WCAG 2.2 AA)
+              Semantics(
+                label:
+                    'Bienvenido a Air Sight. Aprende inglés A1 escuchando tu entorno.',
+                container: true,
+                excludeSemantics: true,
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color.fromARGB(255, 159, 154, 241), // Deep indigo
+                        Color.fromARGB(255, 82, 128, 237), // Slate
                       ],
                     ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'Aprende inglés A1 escuchando tu entorno',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 25,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.6,
-                        height: 1.15,
-                      ),
+                    border: Border.all(
+                      color: AppTheme.primary.withValues(alpha: 0.35),
+                      width: 1.2,
                     ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Experiencia multisensorial accesible con inteligencia artificial, audio nativo y retroalimentación háptica.',
-                      style: TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 14,
-                        height: 1.45,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primary.withValues(alpha: 0.15),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Aprende inglés A1 escuchando tu entorno',
+                        style: TextStyle(
+                          color: Color(0xFFFFFFFF),
+                          fontSize: 25,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.6,
+                          height: 1.15,
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        'Experiencia multisensorial accesible con inteligencia artificial, audio nativo y retroalimentación háptica.',
+                        style: TextStyle(
+                          color: Color(0xFFFFFFFF), // Blanco puro para máximo contraste accesible
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
 
-            const SizedBox(height: 26),
+              const SizedBox(height: 26),
 
             // Encabezado de sección
             Row(
@@ -212,6 +248,8 @@ class HomeScreen extends StatelessWidget {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
                         onTap: () {
+                          HapticService.buttonPress();
+                          _ttsService.stop();
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => item.destination),
@@ -313,51 +351,9 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 )),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color backgroundColor;
-  final Color textColor;
-  final Color borderColor;
-
-  const _StatusBadge({
-    required this.icon,
-    required this.label,
-    required this.backgroundColor,
-    required this.textColor,
-    required this.borderColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor, width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: textColor),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

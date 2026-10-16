@@ -95,11 +95,14 @@ class GlossaryRepository {
     } catch (_) {}
   }
 
-  /// Elimina una entrada del catálogo (HU-09)
+  /// Elimina una entrada del catálogo (HU-09) sincronizando en tiempo real con Cloud Firestore
   static Future<void> deleteWord(String id) async {
     final current = await getWords();
     current.removeWhere((w) => w.id == id);
     await saveWords(current);
+    try {
+      await FirestoreService.instance.deleteGlossaryWord(id);
+    } catch (_) {}
   }
 
   /// Importa un archivo de configuración en formato JSON (HU-09)

@@ -212,12 +212,21 @@ void main() {
       final map = word.toFirestore();
       expect(map['id'], equals('1'));
       expect(map['wordEn'], equals('bird'));
-      expect(map['palabraEn'], equals('bird'));
       expect(map['wordEs'], equals('pájaro'));
-      expect(map['traduccion'], equals('pájaro'));
       expect(map['phonetic'], equals('/bɜːrd/'));
-      expect(map['fonetica'], equals('/bɜːrd/'));
+      expect(map['exampleEn'], equals('The bird is small.'));
+      expect(map['exampleEs'], equals('El pájaro es pequeño.'));
+      expect(map['category'], equals('Animals'));
       expect(map['etiquetasIA'], contains('bird'));
+
+      // Verificar que NO existan campos duplicados o redundantes
+      expect(map.containsKey('palabraEn'), isFalse);
+      expect(map.containsKey('traduccion'), isFalse);
+      expect(map.containsKey('fonetica'), isFalse);
+      expect(map.containsKey('categoria'), isFalse);
+      expect(map.containsKey('fraseEn'), isFalse);
+      expect(map.containsKey('fraseEs'), isFalse);
+      expect(map.containsKey('example'), isFalse);
 
       final fromMap = GlossaryWord.fromMap(map);
       expect(fromMap.id, equals('1'));

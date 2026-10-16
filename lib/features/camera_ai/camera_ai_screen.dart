@@ -5,20 +5,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:image/image.dart' as img;
 
-import '../../core/services/haptic_service.dart';
-import '../../core/services/progress_service.dart';
-import '../../core/services/tts_service.dart';
+import '../../services/haptic_service.dart';
+import '../../services/progress_service.dart';
+import '../../services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../services/gemini_service.dart';
 
-/// Alias de compatibilidad hacia CameraAiScreen según especificación IEEE 830
+/// Alias de compatibilidad hacia CameraAiScreen
 typedef CameraScreen = CameraAiScreen;
 
-/// Pantalla moderna y accesible de exploración visual con IA (Estilo Lovable / shadcn).
 /// Utiliza Gemini para identificar objetos cotidianos básicos de nivel A1
-/// cumpliendo rigurosamente con RF-03, RF-04, RF-05, RNF-01, RNF-02 y RNF-03.
 class CameraAiScreen extends StatefulWidget {
   const CameraAiScreen({super.key});
 
@@ -105,8 +102,8 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
     // 2. Validación Offline Previa (< 1s) (RNF-02)
     final bool conectado = await _hayConexionInternet();
     if (!conectado) {
-      await HapticFeedback.heavyImpact();
-      const msg = 'Se requiere conexión a internet para analizar la imagen';
+      await HapticService.error();
+      const msg = 'Se requiere conexión a internet para utilizar este servicio';
       SemanticsService.announce(msg, TextDirection.ltr);
       await _ttsService.speakSpanish(msg);
       if (mounted) {
@@ -122,7 +119,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
     }
 
     // 3. Retroalimentación Inmediata (< 400ms) (RNF-01 / Sec 3.2.3)
-    await HapticFeedback.mediumImpact();
+    await HapticService.buttonPress();
     SemanticsService.announce(
       'Capturando y analizando imagen, por favor espera...',
       TextDirection.ltr,
@@ -157,21 +154,6 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
     }
   }
 
-  /// Genera una imagen JPEG en memoria para probar objetos de muestra (Emulador)
-  Uint8List _generateSampleJpg(String label) {
-    final image = img.Image(width: 320, height: 240);
-    img.fill(image, color: img.ColorRgb8(245, 247, 250));
-    img.drawString(
-      image,
-      label,
-      font: img.arial24,
-      x: 35,
-      y: 100,
-      color: img.ColorRgb8(30, 41, 59),
-    );
-    return Uint8List.fromList(img.encodeJpg(image));
-  }
-
   /// Analiza los bytes de la imagen con la instrucción estricta de Gemini
   Future<void> _analyzeImageBytes(Uint8List bytes) async {
     if (!_isAnalyzing) {
@@ -199,7 +181,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
         _detectionError = null;
       });
 
-      await HapticFeedback.lightImpact();
+      await HapticService.success();
       await ProgressService.registerCameraUse();
       await ProgressService.registerAudioPlay();
 
@@ -220,7 +202,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
         sentenceEs: fraseEs,
       );
     } else {
-      await HapticFeedback.heavyImpact();
+      await HapticService.error();
 
       final bool es503 = result['esError503'] == true;
       final bool esConexion = result['esErrorConexion'] == true;
@@ -230,7 +212,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
         errorMsg =
             'Servicio de reconocimiento no disponible temporalmente. Intenta en un momento.';
       } else if (esConexion) {
-        errorMsg = 'Se requiere conexión a internet para analizar la imagen';
+        errorMsg = 'Se requiere conexión a internet para utilizar este servicio';
       } else {
         final rawMsg = result['mensaje'] as String? ?? '';
         errorMsg = rawMsg.isNotEmpty
@@ -262,510 +244,561 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Explorar con cámara'),
-        actions: [
-          // Menú discreto para desarrolladores / emulador sin cámara física
-          PopupMenuButton<String>(
-            tooltip: 'Muestras de prueba (Emulador)',
-            icon: Icon(
-              Icons.science_outlined,
-              color: Colors.white.withValues(alpha: 0.6),
-            ),
-            onSelected: (val) {
-              if (_isAnalyzing) return;
-              if (val == 'chair') _analyzeImageBytes(_generateSampleJpg('Chair'));
-              if (val == 'laptop') _analyzeImageBytes(_generateSampleJpg('Laptop Computer'));
-              if (val == 'book') _analyzeImageBytes(_generateSampleJpg('Book'));
-              if (val == 'turbine') {
-                _analyzeImageBytes(
-                  _generateSampleJpg('Complex Industrial Steam Turbine Engine'),
-                );
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'chair', child: Text('Probar Silla (A1)')),
-              PopupMenuItem(value: 'laptop', child: Text('Probar Laptop (A1)')),
-              PopupMenuItem(value: 'book', child: Text('Probar Libro (A1)')),
-              PopupMenuItem(value: 'turbine', child: Text('Probar Rechazo (No A1)')),
-            ],
-          ),
-        ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Stack(
           children: [
-            // VISOR MODERNO DE CÁMARA (Bordes redondeados de 24 dp según RF-03 / Estilo Lovable)
-            Semantics(
-              label: 'Visor de la cámara con marco de enfoque para identificar objetos.',
-              child: Container(
-                height: 340,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  color: const Color(0xFF0F172A),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.10),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primary.withValues(alpha: 0.12),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
+            // VISOR DE CÁMARA (Ocupa 90-100% de la pantalla, bordes redondeados de 24 dp según RF-03)
+            Positioned.fill(
+              bottom: 92,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Semantics(
+                  label:
+                      'Visor de la cámara con marco de enfoque para identificar objetos.',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      color: const Color(0xFF0F172A),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.10),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primary.withValues(alpha: 0.12),
+                          blurRadius: 24,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  children: [
-                    if (_isCameraReady && _cameraController != null)
-                      Positioned.fill(
-                        child: CameraPreview(_cameraController!),
-                      )
-                    else
-                      Positioned.fill(
-                        child: Center(
-                          child: _isAnalyzing
-                              ? const Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    CircularProgressIndicator(
-                                      color: AppTheme.primary,
-                                      strokeWidth: 3,
+                    clipBehavior: Clip.antiAlias,
+                    child: Stack(
+                      children: [
+                        if (_isCameraReady && _cameraController != null)
+                          Positioned.fill(
+                            child: CameraPreview(_cameraController!),
+                          )
+                        else
+                          Positioned.fill(
+                            child: Center(
+                              child: _isAnalyzing
+                                  ? const Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        CircularProgressIndicator(
+                                          color: AppTheme.primary,
+                                          strokeWidth: 3,
+                                        ),
+                                        SizedBox(height: 18),
+                                        Text(
+                                          'Analizando con Gemini...',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(20),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.primary
+                                                .withValues(alpha: 0.12),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.camera_alt_rounded,
+                                            color: AppTheme.primary,
+                                            size: 48,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 14),
+                                        const Text(
+                                          'Escáner Visual A1',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 19,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: -0.3,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                              horizontal: 24),
+                                          child: Text(
+                                            'Apunta a un objeto cotidiano de estudio, casa o comida.',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: AppTheme.textSecondary,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    SizedBox(height: 18),
-                                    Text(
-                                      'Analizando con Gemini...',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(20),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.primary.withValues(alpha: 0.12),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.camera_alt_rounded,
-                                        color: AppTheme.primary,
-                                        size: 48,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    const Text(
-                                      'Escáner Visual A1',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 19,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: -0.3,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    const Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 24),
-                                      child: Text(
-                                        'Apunta a un objeto cotidiano de estudio, casa o comida.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: AppTheme.textSecondary,
-                                          fontSize: 13,
+                            ),
+                          ),
+
+                        // Esquinas iluminadas futuristas (Scanner overlay)
+                        const Positioned.fill(
+                          child: _ScannerCornerOverlay(),
+                        ),
+
+                        // Overlay de análisis activo con LiveRegion accesible para TalkBack
+                        if (_isAnalyzing)
+                          Positioned.fill(
+                            child: Semantics(
+                              liveRegion: true,
+                              label:
+                                  'Capturando y analizando imagen, por favor espera...',
+                              child: Container(
+                                color: const Color(0xFF0B0F19)
+                                    .withValues(alpha: 0.80),
+                                child: const Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: 48,
+                                        height: 48,
+                                        child: CircularProgressIndicator(
+                                          color: AppTheme.primary,
+                                          strokeWidth: 3.5,
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                      SizedBox(height: 18),
+                                      Text(
+                                        'Identificando objeto con Gemini...',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // BOTÓN PRINCIPAL DE CAPTURA FLOTANTE (≥ 56 dp / WCAG 2.2 AA)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 16,
+              child: Semantics(
+                button: true,
+                label: 'Capturar y reconocer objeto',
+                hint:
+                    'Toca dos veces para tomar la foto y analizar el objeto con Inteligencia Artificial',
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF6366F1), // Vibrant Indigo
+                        Color(0xFF4F46E5), // Deep Indigo
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primary.withValues(alpha: 0.35),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: _isAnalyzing ? null : _captureFromCamera,
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 56),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (_isAnalyzing)
+                              const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Colors.white,
+                                ),
+                              )
+                            else
+                              const Icon(
+                                Icons.camera_rounded,
+                                color: Colors.white,
+                                size: 26,
+                              ),
+                            const SizedBox(width: 12),
+                            Text(
+                              _isAnalyzing
+                                  ? 'Analizando...'
+                                  : 'Capturar y Analizar',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-
-                    // Esquinas iluminadas futuristas (Scanner overlay)
-                    const Positioned.fill(
-                      child: _ScannerCornerOverlay(),
                     ),
+                  ),
+                ),
+              ),
+            ),
 
-                    // Overlay de análisis activo con LiveRegion accesible para TalkBack
-                    if (_isAnalyzing)
-                      Positioned.fill(
-                        child: Semantics(
-                          liveRegion: true,
-                          label: 'Capturando y analizando imagen, por favor espera...',
-                          child: Container(
-                            color: const Color(0xFF0B0F19).withValues(alpha: 0.80),
-                            child: const Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
+            // TARJETA DE RESULTADO FLOTANTE CENTRADA (Éxito)
+            if (data != null && palabraIngles != null)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.40),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+                  child: Center(
+                    child: SingleChildScrollView(
+                      child: Semantics(
+                        label:
+                            'Objeto identificado: $palabraIngles, en español $traduccionEspanol. Categoría: $categoria.',
+                        child: Container(
+                          padding: const EdgeInsets.all(22),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surface,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: AppTheme.primary.withValues(alpha: 0.35),
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.primary.withValues(alpha: 0.18),
+                                blurRadius: 24,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Badge superior y botón cerrar
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  SizedBox(
-                                    width: 48,
-                                    height: 48,
-                                    child: CircularProgressIndicator(
-                                      color: AppTheme.primary,
-                                      strokeWidth: 3.5,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.secondary
+                                          .withValues(alpha: 0.16),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: AppTheme.secondary
+                                            .withValues(alpha: 0.35),
+                                      ),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.check_circle_rounded,
+                                          color: AppTheme.secondary,
+                                          size: 16,
+                                        ),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'Objeto A1 Detectado',
+                                          style: TextStyle(
+                                            color: Color(0xFF059669),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  SizedBox(height: 18),
-                                  Text(
-                                    'Identificando objeto con Gemini...',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 16,
+                                  IconButton(
+                                    icon: const Icon(Icons.close_rounded,
+                                        size: 22),
+                                    tooltip: 'Cerrar resultado',
+                                    onPressed: () {
+                                      HapticService.selection();
+                                      setState(() => _detectedData = null);
+                                    },
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+
+                              // Término en inglés en grande + botón de audio
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          palabraIngles,
+                                          style: const TextStyle(
+                                            fontSize: 32,
+                                            fontWeight: FontWeight.w900,
+                                            color: AppTheme.textPrimary,
+                                            letterSpacing: -0.6,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '/$palabraIngles/',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppTheme.primary,
+                                            fontFamily: 'monospace',
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '→ ${traduccionEspanol ?? ''}',
+                                          style: const TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF059669),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Botón destacado con altavoz (≥ 48x48 dp)
+                                  Semantics(
+                                    button: true,
+                                    label: 'Pronunciar $palabraIngles en inglés',
+                                    child: Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.primary
+                                            .withValues(alpha: 0.15),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: AppTheme.primary
+                                              .withValues(alpha: 0.35),
+                                        ),
+                                      ),
+                                      child: IconButton(
+                                        iconSize: 26,
+                                        padding: EdgeInsets.zero,
+                                        icon: const Icon(
+                                          Icons.volume_up_rounded,
+                                          color: AppTheme.primary,
+                                        ),
+                                        onPressed: () {
+                                          HapticService.selection();
+                                          _ttsService
+                                              .speakEnglish(palabraIngles);
+                                        },
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
 
-            const SizedBox(height: 20),
-
-            // BOTÓN PRINCIPAL DE CAPTURA FLOTANTE / ERGONÓMICO (≥ 56 dp / WCAG 2.2 AA)
-            Semantics(
-              button: true,
-              label: 'Capturar foto para identificar objeto en inglés',
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF6366F1), // Vibrant Indigo
-                      Color(0xFF4F46E5), // Deep Indigo
-                    ],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primary.withValues(alpha: 0.35),
-                      blurRadius: 18,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(18),
-                    onTap: _isAnalyzing ? null : _captureFromCamera,
-                    child: Container(
-                      constraints: const BoxConstraints(minHeight: 56),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (_isAnalyzing)
-                            const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white,
-                              ),
-                            )
-                          else
-                            const Icon(
-                              Icons.camera_rounded,
-                              color: Colors.white,
-                              size: 26,
-                            ),
-                          const SizedBox(width: 12),
-                          Text(
-                            _isAnalyzing ? 'Analizando...' : 'Capturar y Analizar',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 18),
-
-            // TARJETA DE RESULTADO FLOTANTE ACCESIBLE (Estilo Lovable / shadcn)
-            if (data != null && palabraIngles != null)
-              Semantics(
-                label:
-                    'Objeto identificado: $palabraIngles, en español $traduccionEspanol. Categoría: $categoria. Frase: $fraseIngles. Traducción: $fraseEspanol.',
-                child: Container(
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surface,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: AppTheme.primary.withValues(alpha: 0.35),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primary.withValues(alpha: 0.18),
-                        blurRadius: 24,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Badge superior y botón cerrar
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: AppTheme.secondary.withValues(alpha: 0.16),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppTheme.secondary.withValues(alpha: 0.35),
-                              ),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.check_circle_rounded,
-                                  color: AppTheme.secondary,
-                                  size: 16,
-                                ),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Objeto A1 Detectado',
-                                  style: TextStyle(
-                                    color: Color(0xFF6EE7B7),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
+                              if (categoria != null &&
+                                  categoria.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primary
+                                        .withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'Categoría: $categoria',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.textSecondary,
+                                    ),
                                   ),
                                 ),
                               ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close_rounded, size: 20),
-                            tooltip: 'Cerrar resultado',
-                            onPressed: () {
-                              HapticService.selection();
-                              setState(() => _detectedData = null);
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
 
-                      // Término en inglés destacado en grande + botón de audio
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  palabraIngles,
-                                  style: const TextStyle(
-                                    fontSize: 34,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                    letterSpacing: -0.8,
+                              if (fraseIngles != null &&
+                                  fraseIngles.isNotEmpty) ...[
+                                const Divider(height: 24),
+                                const Text(
+                                  'Ejemplo en contexto:',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.textSecondary,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '→ ${traduccionEspanol ?? ''}',
+                                  '"$fraseIngles"',
                                   style: const TextStyle(
-                                    fontSize: 20,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w700,
-                                    color: AppTheme.secondary,
+                                    fontStyle: FontStyle.italic,
+                                    color: AppTheme.textPrimary,
                                   ),
                                 ),
+                                if (fraseEspanol != null &&
+                                    fraseEspanol.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    fraseEspanol,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 12),
+                                Wrap(
+                                  spacing: 10,
+                                  runSpacing: 10,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        HapticService.selection();
+                                        _ttsService
+                                            .speakCameraRecognitionResult(
+                                          wordEn: palabraIngles,
+                                          wordEs: traduccionEspanol ?? '',
+                                          sentenceEn: fraseIngles,
+                                          sentenceEs: fraseEspanol ?? '',
+                                        );
+                                      },
+                                      icon: const Icon(Icons.replay_rounded,
+                                          size: 18),
+                                      label: const Text(
+                                          'Repetir locución completa'),
+                                    ),
+                                  ],
+                                ),
                               ],
-                            ),
+                            ],
                           ),
-                          // Botón destacado con altavoz para repetir la pronunciación
-                          Semantics(
-                            button: true,
-                            label: 'Pronunciar $palabraIngles en inglés',
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.18),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: AppTheme.primary.withValues(alpha: 0.40),
-                                ),
-                              ),
-                              child: IconButton(
-                                iconSize: 28,
-                                icon: const Icon(
-                                  Icons.volume_up_rounded,
-                                  color: AppTheme.primary,
-                                ),
-                                onPressed: () {
-                                  HapticService.selection();
-                                  _ttsService.speakEnglish(palabraIngles);
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-
-                      if (categoria != null && categoria.isNotEmpty) ...[
-                        const SizedBox(height: 14),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.06),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'Categoría: $categoria',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ],
-
-                      if (fraseIngles != null && fraseIngles.isNotEmpty) ...[
-                        const Divider(height: 28),
-                        const Text(
-                          'Ejemplo en contexto:',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '"$fraseIngles"',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            fontStyle: FontStyle.italic,
-                            color: Colors.white,
-                          ),
-                        ),
-                        if (fraseEspanol != null && fraseEspanol.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            fraseEspanol,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 14),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: [
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                HapticService.selection();
-                                _ttsService.speakCameraRecognitionResult(
-                                  wordEn: palabraIngles,
-                                  wordEs: traduccionEspanol ?? '',
-                                  sentenceEn: fraseIngles,
-                                  sentenceEs: fraseEspanol ?? '',
-                                );
-                              },
-                              icon: const Icon(Icons.replay_rounded, size: 18),
-                              label: const Text('Repetir locución completa'),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                HapticService.selection();
-                                _ttsService.speakBilingual(
-                                  textEn: fraseIngles,
-                                  textEs: fraseEspanol ?? '',
-                                );
-                              },
-                              icon: const Icon(Icons.record_voice_over_rounded, size: 18),
-                              label: const Text('Escuchar solo ejemplo'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
               ),
 
-            // Tarjeta de aviso de rechazo o error controlado
+            // TARJETA DE AVISO O ERROR FLOTANTE CENTRADA
             if (error != null)
-              Semantics(
-                label: 'Aviso de detección. $error',
+              Positioned.fill(
                 child: Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppTheme.warning.withValues(alpha: 0.45),
-                      width: 1.2,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
+                  color: Colors.black.withValues(alpha: 0.40),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
+                  child: Center(
+                    child: Semantics(
+                      label: 'Aviso de detección. $error',
+                      child: Container(
+                        padding: const EdgeInsets.all(22),
                         decoration: BoxDecoration(
-                          color: AppTheme.warning.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
+                          color: AppTheme.surface,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: AppTheme.warning.withValues(alpha: 0.45),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.warning.withValues(alpha: 0.18),
+                              blurRadius: 24,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
-                        child: const Icon(
-                          Icons.info_outline_rounded,
-                          color: AppTheme.warning,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Aviso de Inferencia',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
+                            Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.warning
+                                            .withValues(alpha: 0.15),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.info_outline_rounded,
+                                        color: AppTheme.warning,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Text(
+                                      'Aviso de Detección',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppTheme.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.close_rounded,
+                                      size: 22),
+                                  tooltip: 'Cerrar aviso',
+                                  onPressed: () {
+                                    HapticService.selection();
+                                    setState(() => _detectionError = null);
+                                  },
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 12),
                             Text(
                               error,
                               style: const TextStyle(
-                                fontSize: 13,
+                                fontSize: 14,
                                 color: AppTheme.textSecondary,
-                                height: 1.35,
+                                height: 1.4,
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -776,7 +809,6 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
   }
 }
 
-/// Overlay de esquinas iluminadas futuristas estilo escáner Lovable
 class _ScannerCornerOverlay extends StatelessWidget {
   const _ScannerCornerOverlay();
 
@@ -801,7 +833,6 @@ class _ScannerCornerOverlay extends StatelessWidget {
                 ),
               ),
             ),
-            // Top-right
             Align(
               alignment: Alignment.topRight,
               child: Container(
@@ -815,7 +846,6 @@ class _ScannerCornerOverlay extends StatelessWidget {
                 ),
               ),
             ),
-            // Bottom-left
             Align(
               alignment: Alignment.bottomLeft,
               child: Container(
@@ -829,7 +859,6 @@ class _ScannerCornerOverlay extends StatelessWidget {
                 ),
               ),
             ),
-            // Bottom-right
             Align(
               alignment: Alignment.bottomRight,
               child: Container(

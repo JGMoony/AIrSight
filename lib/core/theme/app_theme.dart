@@ -1,36 +1,36 @@
 import 'package:flutter/material.dart';
 
-/// Tema visual moderno inspirado en el diseño web de Lovable / Modern Shadcn.
-/// Fondo Dark Slate profundo (#0B0F19), tarjetas #1E293B con bordes sutiles,
-/// acento Índigo vibrante (#6366F1) y Esmeralda (#10B981) para estados de éxito/activos.
-/// Cumple estrictamente con las directrices de accesibilidad y contraste WCAG 2.2 AA.
+/// Tema visual moderno en MODO CLARO (WCAG 2.2 AA).
+/// Fondo blanco ultra limpio (#F8FAFC / #FFFFFF), tarjetas blancas con borde sutil (#E2E8F0),
+/// acento Índigo profundo de alto contraste (#4338CA) con ratio > 7:1 contra fondo blanco,
+/// y tipografías en Dark Slate (#0F172A) y Slate (#475569) con ratio >= 4.5:1.
 class AppTheme {
-  // Paleta Lovable Dark Slate
-  static const Color background = Color(0xFF0B0F19);
-  static const Color surface = Color(0xFF1E293B);
-  static const Color surfaceLight = Color(0xFF334155);
-  static const Color primary = Color(0xFF6366F1); // Indigo vibrante Lovable
-  static const Color primaryLight = Color(0xFF818CF8); // Indigo claro para alto contraste
-  static const Color primaryHover = Color(0xFF4F46E5);
-  static const Color secondary = Color(0xFF10B981); // Esmeralda moderno Lovable
-  static const Color success = Color(0xFF10B981);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color error = Color(0xFFEF4444);
+  // Paleta Modo Claro Moderno de Alto Contraste
+  static const Color background = Color(0xFFF8FAFC); // Slate 50 ultra limpio
+  static const Color surface = Color(0xFFFFFFFF); // Blanco puro
+  static const Color surfaceLight = Color(0xFFF1F5F9); // Slate 100
+  static const Color primary = Color(0xFF4338CA); // Deep Indigo (> 7:1 de contraste)
+  static const Color primaryLight = Color(0xFF6366F1); // Indigo vibrante
+  static const Color primaryHover = Color(0xFF3730A3); // Deep Indigo hover
+  static const Color secondary = Color(0xFF0D9488); // Teal 600
+  static const Color success = Color(0xFF059669); // Emerald 600
+  static const Color warning = Color(0xFFD97706); // Amber 600
+  static const Color error = Color(0xFFDC2626); // Red 600
 
   // Tipografía de alto contraste WCAG 2.2 AA
-  static const Color textPrimary = Color(0xFFFFFFFF); // Blanco puro
-  static const Color textSecondary = Color(0xFF94A3B8); // Slate claro
-  static const Color textMuted = Color(0xFF64748B);
+  static const Color textPrimary = Color(0xFF0F172A); // Dark Slate (ratio > 12:1)
+  static const Color textSecondary = Color(0xFF475569); // Slate 600 (ratio > 4.5:1)
+  static const Color textMuted = Color(0xFF64748B); // Slate 500
 
   // Bordes sutiles y divisores
-  static final Color borderSubtle = Colors.white.withValues(alpha: 0.08);
+  static const Color borderSubtle = Color(0xFFE2E8F0); // Slate 200
 
-  static ThemeData lightTheme() => lovableTheme();
+  static ThemeData lightTheme() => modernLightTheme();
 
-  static ThemeData darkTheme() => lovableTheme();
+  static ThemeData darkTheme() => modernLightTheme();
 
-  static ThemeData lovableTheme() {
-    final colorScheme = ColorScheme.dark(
+  static ThemeData modernLightTheme() {
+    final colorScheme = ColorScheme.light(
       primary: primary,
       secondary: secondary,
       surface: surface,
@@ -43,38 +43,46 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: background,
       canvasColor: background,
-      dialogTheme: const DialogThemeData(backgroundColor: surface),
-      appBarTheme: AppBarTheme(
+      dialogTheme: DialogThemeData(
+        backgroundColor: surface,
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: borderSubtle),
+        ),
+      ),
+      appBarTheme: const AppBarTheme(
         centerTitle: true,
         elevation: 0,
-        backgroundColor: background,
+        backgroundColor: surface,
         foregroundColor: textPrimary,
-        titleTextStyle: const TextStyle(
+        titleTextStyle: TextStyle(
           color: textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w800,
           letterSpacing: -0.5,
         ),
-        iconTheme: const IconThemeData(color: textPrimary),
+        iconTheme: IconThemeData(color: textPrimary),
       ),
       cardTheme: CardThemeData(
         color: surface,
-        elevation: 0,
+        elevation: 1,
         margin: EdgeInsets.zero,
+        shadowColor: Colors.black.withValues(alpha: 0.04),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: borderSubtle),
+          side: const BorderSide(color: borderSubtle),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
           foregroundColor: Colors.white,
-          elevation: 0,
+          elevation: 1,
           minimumSize: const Size(double.infinity, 54),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -88,9 +96,9 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: textPrimary,
+          foregroundColor: primary,
           minimumSize: const Size(double.infinity, 52),
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+          side: const BorderSide(color: borderSubtle, width: 1.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -105,6 +113,7 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: primary,
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          minimumSize: const Size(48, 48),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -115,18 +124,18 @@ class AppTheme {
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: borderSubtle),
+          borderSide: const BorderSide(color: borderSubtle),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: borderSubtle),
+          borderSide: const BorderSide(color: borderSubtle),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: primary, width: 2),
         ),
       ),
-      dividerTheme: DividerThemeData(
+      dividerTheme: const DividerThemeData(
         color: borderSubtle,
         thickness: 1,
       ),

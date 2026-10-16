@@ -1,14 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-import '../../core/services/auth_service.dart';
-import '../../core/services/haptic_service.dart';
-import '../../core/services/tts_service.dart';
-import '../../core/services/voice_search_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/haptic_service.dart';
+import '../../services/tts_service.dart';
+import '../../services/voice_search_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/local_user_storage.dart';
 import '../../services/firestore_service.dart';
-import 'glossary_data.dart';
 import 'glossary_detail_screen.dart';
 import 'glossary_repository.dart';
 import 'glossary_word.dart';
@@ -24,8 +24,12 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
   final TtsService _ttsService = TtsService();
   final VoiceSearchService _voiceService = VoiceSearchService();
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
-  List<GlossaryWord> _words = glossaryWords;
+  StreamSubscription<List<GlossaryWord>>? _wordsSubscription;
+
+  List<GlossaryWord> _words = [];
+  bool _isLoading = true;
   bool _isAdmin = false;
   bool _isListening = false;
   String searchText = '';
@@ -34,8 +38,24 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
   @override
   void initState() {
     super.initState();
-    _loadWords();
     _checkAdminRole();
+    _listenToGlossaryStream();
+  }
+
+  void _listenToGlossaryStream() {
+    _wordsSubscription = GlossaryRepository.streamWords().listen(
+      (words) {
+        if (!mounted) return;
+        setState(() {
+          _words = words;
+          _isLoading = false;
+        });
+      },
+      onError: (_) {
+        if (!mounted) return;
+        _loadFallbackWords();
+      },
+    );
   }
 
   Future<void> _loadWords() async {
@@ -43,8 +63,11 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
     if (!mounted) return;
     setState(() {
       _words = words;
+      _isLoading = false;
     });
   }
+
+  Future<void> _loadFallbackWords() => _loadWords();
 
   Future<void> _checkAdminRole() async {
     final localUser = await LocalUserStorage.getUser();
@@ -70,10 +93,26 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
 
   @override
   void dispose() {
+    _wordsSubscription?.cancel();
+    _scrollController.dispose();
     _ttsService.stop();
     _voiceService.stop();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _selectCategory(String category) {
+    HapticService.selection();
+    setState(() {
+      selectedCategory = category;
+    });
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        440.0,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   Future<void> _toggleVoiceSearch() async {
@@ -460,8 +499,30 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+        child: _isLoading && _words.isEmpty
+            ? Center(
+                child: Semantics(
+                  label: 'Cargando glosario desde la base de datos...',
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        'Cargando glosario...',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : ListView(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
           children: [
             Text(
               'Explora y aprende vocabulario básico',
@@ -536,12 +597,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                     icon: _iconForCategory(category),
                     color: color,
                     isSelected: isSelected,
-                    onTap: () {
-                      HapticService.selection();
-                      setState(() {
-                        selectedCategory = category;
-                      });
-                    },
+                    onTap: () => _selectCategory(category),
                   );
                 },
               ),
@@ -649,7 +705,10 @@ class _SearchBox extends StatelessWidget {
               Semantics(
                 label: isListening
                     ? 'Detener escucha de micrófono'
-                    : 'Buscar palabra dictando por voz al micrófono',
+                    : 'Buscar palabra por voz',
+                hint: isListening
+                    ? 'Toca dos veces para detener'
+                    : 'Toca dos veces para dictar el término a filtrar',
                 button: true,
                 child: IconButton(
                   onPressed: onMicPressed,
@@ -848,7 +907,7 @@ class _WordCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       label:
-          '${word.wordEn}, traducción ${word.wordEs}, categoría ${word.category}. Ejemplo: ${word.exampleEn}. Traducción del ejemplo: ${word.exampleEs}. Toca dos veces para ver detalle.',
+          '${word.wordEn}, que significa ${word.wordEs}. Toca dos veces para ver detalles completos.',
       button: true,
       child: Card(
         color: AppTheme.surface,
@@ -897,6 +956,16 @@ class _WordCard extends StatelessWidget {
                           color: AppTheme.textPrimary,
                         ),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        word.phonetic,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primary,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
                       const SizedBox(height: 3),
                       Text(
                         word.wordEs,
@@ -933,7 +1002,7 @@ class _WordCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Semantics(
-                  label: 'Escuchar palabra ${word.wordEn}',
+                  label: 'Escuchar pronunciación de ${word.wordEn}',
                   button: true,
                   child: IconButton.filledTonal(
                     style: IconButton.styleFrom(

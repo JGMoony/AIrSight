@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../../core/services/haptic_service.dart';
-import '../../core/services/progress_service.dart';
-import '../../core/services/tts_service.dart';
+import '../../data/local_user_storage.dart';
+import '../../services/auth_service.dart';
+import '../../services/firestore_service.dart';
+import '../../services/haptic_service.dart';
+import '../../services/progress_service.dart';
+import '../../services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
+import 'glossary_repository.dart';
 import 'glossary_word.dart';
 
 class GlossaryDetailScreen extends StatefulWidget {
@@ -20,11 +24,70 @@ class GlossaryDetailScreen extends StatefulWidget {
 
 class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
   final TtsService _ttsService = TtsService();
+  bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
     ProgressService.registerWordViewed(widget.word.id);
+    _checkAdminRole();
+  }
+
+  Future<void> _checkAdminRole() async {
+    final localUser = await LocalUserStorage.getUser();
+    final firebaseUser = AuthService().currentUser;
+
+    bool admin = localUser?.role == 'admin' ||
+        localUser?.role == 'administrador' ||
+        firebaseUser?.email?.trim().toLowerCase() == 'admin@airsight.com';
+
+    if (!admin && firebaseUser != null) {
+      try {
+        final firestoreUser =
+            await FirestoreService.instance.getUser(firebaseUser.uid);
+        admin = firestoreUser?.isAdmin == true;
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isAdmin = admin;
+    });
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Eliminar palabra?'),
+        content: Text(
+          'Esta acción eliminará "${widget.word.wordEn}" de la base de datos de Firestore.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      await GlossaryRepository.deleteWord(widget.word.id);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Palabra "${widget.word.wordEn}" eliminada de Firestore.'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
   }
 
   @override
@@ -107,6 +170,14 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(word.wordEn),
+        actions: [
+          if (_isAdmin)
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+              tooltip: 'Eliminar palabra',
+              onPressed: _confirmDelete,
+            ),
+        ],
       ),
       body: SafeArea(
         child: ListView(
@@ -145,6 +216,16 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
                           fontSize: 38,
                           fontWeight: FontWeight.w900,
                           color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        word.phonetic,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primary,
+                          fontFamily: 'monospace',
                         ),
                       ),
                       const SizedBox(height: 8),

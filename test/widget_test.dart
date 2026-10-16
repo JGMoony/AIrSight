@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:air_sight/core/services/auth_feedback_service.dart';
+import 'package:air_sight/services/auth_feedback_service.dart';
 
 void main() {
   testWidgets('rootScaffoldMessengerKey se enlaza correctamente a MaterialApp', (

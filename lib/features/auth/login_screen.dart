@@ -2,9 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-import '../../core/services/auth_feedback_service.dart';
-import '../../core/services/auth_service.dart';
-import '../../core/services/tts_service.dart';
+import '../../services/auth_feedback_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/tts_service.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:air_sight/core/services/auth_feedback_service.dart';
-import 'package:air_sight/core/services/tts_service.dart';
+import 'package:air_sight/services/auth_feedback_service.dart';
+import 'package:air_sight/services/tts_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

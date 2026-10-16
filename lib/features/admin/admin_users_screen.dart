@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../core/services/auth_service.dart';
-import '../../core/services/tts_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/user_model.dart';
 import '../../services/firestore_service.dart';

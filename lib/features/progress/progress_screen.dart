@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../core/services/progress_service.dart';
+import '../../services/progress_service.dart';
+import '../../services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../glossary/glossary_data.dart';
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
@@ -11,14 +13,19 @@ class ProgressScreen extends StatefulWidget {
 }
 
 class _ProgressScreenState extends State<ProgressScreen> {
-  static const int totalWordsGoal = 60;
-
+  final TtsService _ttsService = TtsService.instance;
   late Future<ProgressSummary> _summaryFuture;
 
   @override
   void initState() {
     super.initState();
     _loadSummary();
+  }
+
+  @override
+  void dispose() {
+    _ttsService.stop();
+    super.dispose();
   }
 
   void _loadSummary() {
@@ -29,46 +36,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
     setState(_loadSummary);
   }
 
-  Future<void> _confirmReset() async {
-    final shouldReset = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Reiniciar progreso'),
-          content: const Text(
-            '¿Seguro que quieres borrar el progreso local? Esta acción no se puede deshacer.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Reiniciar'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldReset != true) return;
-
-    await ProgressService.resetProgress();
-
-    if (!mounted) return;
-
-    _reload();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Progreso reiniciado.'),
-      ),
-    );
-  }
-
   double _calculateWordProgress(int wordsViewed) {
-    final progress = wordsViewed / totalWordsGoal;
+    if (glossaryWords.isEmpty) return 0.0;
+    final progress = wordsViewed / glossaryWords.length;
     return progress.clamp(0.0, 1.0);
   }
 
@@ -105,6 +75,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
           final wordProgress = _calculateWordProgress(summary.wordsViewed);
           final successPercent = (summary.successRate * 100).round();
+          final totalWordsCatalog = glossaryWords.length;
 
           return SafeArea(
             child: RefreshIndicator(
@@ -112,9 +83,39 @@ class _ProgressScreenState extends State<ProgressScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(18),
                 children: [
+                  Semantics(
+                    label: 'Escuchar mi progreso completo',
+                    hint: 'Toca dos veces para escuchar un resumen hablado de tu aprendizaje',
+                    button: true,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(56),
+                        backgroundColor: AppTheme.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      onPressed: () {
+                        _ttsService.speakSpanish(
+                          'Tu progreso actual es: ${summary.wordsViewed} palabras exploradas, ${summary.audioPlays} audios nativos reproducidos, ${summary.correctAnswers} aciertos en prácticas y ${summary.tutorQueries} consultas realizadas al tutor de voz.',
+                        );
+                      },
+                      icon: const Icon(Icons.volume_up_rounded, size: 28),
+                      label: const Text(
+                        'Escuchar mi progreso',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
                   _SummaryCard(
                     wordsViewed: summary.wordsViewed,
-                    totalWordsGoal: totalWordsGoal,
+                    totalWordsGoal: totalWordsCatalog,
                     progressValue: wordProgress,
                     lastAccess: _formatLastAccess(summary.lastAccess),
                   ),
@@ -149,6 +150,16 @@ class _ProgressScreenState extends State<ProgressScreen> {
                         value: '${summary.cameraUses}',
                         icon: Icons.camera_alt_rounded,
                       ),
+                      _StatCard(
+                        label: 'Consultas al tutor',
+                        value: '${summary.tutorQueries}',
+                        icon: Icons.record_voice_over_rounded,
+                      ),
+                      _StatCard(
+                        label: 'Aciertos práctica',
+                        value: '${summary.correctAnswers}',
+                        icon: Icons.check_circle_outline_rounded,
+                      ),
                     ],
                   ),
 
@@ -158,18 +169,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     correctAnswers: summary.correctAnswers,
                     incorrectAnswers: summary.incorrectAnswers,
                     successPercent: successPercent,
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  Semantics(
-                    label: 'Reiniciar progreso local',
-                    button: true,
-                    child: OutlinedButton.icon(
-                      onPressed: _confirmReset,
-                      icon: const Icon(Icons.restart_alt_rounded),
-                      label: const Text('Reiniciar progreso local'),
-                    ),
                   ),
                 ],
               ),

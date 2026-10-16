@@ -465,6 +465,19 @@ class FirestoreService {
     }
   }
 
+  /// Elimina un documento de palabra de la colección 'glosario_a1' usando su docId real en Firestore.
+  Future<void> deleteGlossaryWord(String docId) async {
+    try {
+      if (docId.trim().isEmpty) return;
+      await _firestore.collection('glosario_a1').doc(docId).delete();
+      debugPrint('[FirestoreService] Palabra eliminada de glosario_a1 con docId: $docId');
+    } catch (e, stackTrace) {
+      debugPrint('[FirestoreService] Error al eliminar palabra de glosario_a1: $e');
+      debugPrint('StackTrace: $stackTrace');
+      rethrow;
+    }
+  }
+
   /// Sube y sincroniza el catálogo inicial A1 (102 palabras de [glossaryWords]) en 'glosario_a1'.
   /// Si la colección ya contiene documentos y [force] es false, omite la subida para evitar sobrecostos.
   /// Cada documento almacena la palabra en inglés, traducción en español, fonética,

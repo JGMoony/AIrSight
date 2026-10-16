@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:air_sight/core/services/tts_service.dart';
+import 'package:air_sight/services/tts_service.dart';
 import 'package:air_sight/core/theme/app_theme.dart';
 import 'package:air_sight/features/camera_ai/camera_ai_screen.dart';
 
@@ -55,7 +55,8 @@ void main() {
       final semanticsFinder = find.byWidgetPredicate(
         (w) =>
             w is Semantics &&
-            w.properties.label == 'Capturar foto para identificar objeto en inglés' &&
+            (w.properties.label == 'Capturar y reconocer objeto' ||
+                w.properties.label == 'Capturar foto para identificar objeto en inglés') &&
             w.properties.button == true,
       );
       expect(semanticsFinder, findsOneWidget);
