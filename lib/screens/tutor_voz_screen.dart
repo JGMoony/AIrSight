@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:http/http.dart' as http;
 
 import '../services/haptic_service.dart';
 import '../services/progress_service.dart';
@@ -81,6 +83,9 @@ class _TutorVozScreenState extends State<TutorVozScreen>
   Future<void> _toggleListening() async {
     HapticService.buttonPress();
 
+    // Detener explícitamente el sintetizador de voz antes de escuchar o cambiar estado
+    await _ttsService.stopAll();
+
     if (_isListening) {
       await _voiceService.stop();
       _pulseController.stop();
@@ -92,7 +97,9 @@ class _TutorVozScreenState extends State<TutorVozScreen>
       return;
     }
 
+    // Limpieza inmediata de la tarjeta de resultado y errores previos al abrir el micrófono
     setState(() {
+      _voiceResult = null;
       _errorMessage = null;
     });
 
@@ -143,6 +150,15 @@ class _TutorVozScreenState extends State<TutorVozScreen>
   }
 
   Future<void> _consultarGemini(String query) async {
+    // Detener cualquier locución activa antes de procesar una nueva consulta
+    await _ttsService.stopAll();
+
+    // Limpieza inmediata del resultado anterior y errores para no engañar al usuario en pantalla
+    setState(() {
+      _voiceResult = null;
+      _errorMessage = null;
+    });
+
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty) return;
 
@@ -168,9 +184,34 @@ class _TutorVozScreenState extends State<TutorVozScreen>
       return;
     }
 
+    // Validación inmediata del filtro de término individual (RF-11 / MULTI_WORD)
+    // Corta inmediatamente el audio y evita reproducir "Consultando al tutor..." si excede una palabra
+    final validacion = GeminiService.validarConsultaPalabraIndividual(cleanQuery);
+    if (!validacion.esValida) {
+      await _ttsService.stopAll();
+      final errorMsg = validacion.mensajeError ?? GeminiService.mensajeContingenciaPalabraUnica;
+      setState(() {
+        _isConsulting = false;
+        _errorMessage = errorMsg;
+      });
+      await HapticService.error();
+      _announce(errorMsg);
+      await _ttsService.speakSpanish(errorMsg);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+      return;
+    }
+
     // Retroalimentación inmediata WCAG 2.2 AA (< 400 ms) (RNF-01 / Sec 3.2.3)
     HapticService.buttonPress();
     _announce('Consultando tutor con inteligencia artificial, por favor espera...');
+    _ttsService.speakSpanish('Consultando al tutor, por favor espera un momento...');
 
     setState(() {
       _isConsulting = true;
@@ -195,30 +236,21 @@ class _TutorVozScreenState extends State<TutorVozScreen>
         final term = result.wordOrTerm ?? cleanQuery;
         _announce('Respuesta del tutor para $term: ${result.translation}. Reproduciendo audio.');
 
-        // Reproducción pedagógica condicionada por intención (RF-11)
-        if (result.intent == VoiceQueryIntent.howToPronounce) {
-          final phon = result.phonetic ?? '';
-          final pronText = phon.isNotEmpty
-              ? '$term se pronuncia $phon. Escucha:'
-              : '$term se pronuncia:';
-          await _ttsService.speakPronunciationResponse(
-            explanationEs: pronText,
-            wordEn: term,
-          );
-        } else if (result.intent == VoiceQueryIntent.whatDoesItMean) {
-          final expl = result.explanation ?? '';
-          await _ttsService.speakSpanish(
-            '$term significa ${result.translation} en español. $expl',
-          );
-        } else {
-          await _ttsService.speakVoiceAssistantResponse(
-            explanationEs: result.explanation ??
-                '$term significa ${result.translation} en español.',
-            exampleEn: result.exampleEn ?? '',
-            exampleEs: result.exampleEs ?? '',
-          );
-        }
+        // Locución estándar secuencial completa:
+        // 1. Palabra en inglés y significado en español.
+        // 2. Pronunciación / fonética.
+        // 3. Frase de ejemplo en inglés: "Frase de ejemplo: [exampleEn]."
+        // 4. Traducción del ejemplo en español: "[exampleEs]"
+        await _ttsService.speakTutorStandardResponse(
+          wordEn: term,
+          wordEs: result.translation ?? '',
+          phonetic: result.phonetic,
+          explanationEs: result.explanation,
+          exampleEn: result.exampleEn,
+          exampleEs: result.exampleEs,
+        );
       } else {
+        await _ttsService.stopAll();
         final error = _formatearMensajeErrorAccesible(result.errorMessage);
         setState(() {
           _errorMessage = error;
@@ -237,8 +269,68 @@ class _TutorVozScreenState extends State<TutorVozScreen>
           );
         }
       }
+    } on http.ClientException catch (e) {
+      if (!mounted) return;
+      await _ttsService.stopAll();
+      debugPrint('Error de cliente HTTP (oculto en UI): $e');
+      const errorMsg = 'Hubo un problema de conexión. Por favor verifica tu acceso a internet e intenta nuevamente.';
+      setState(() {
+        _isConsulting = false;
+        _errorMessage = errorMsg;
+      });
+      HapticService.error();
+      _announce(errorMsg);
+      await _ttsService.speakSpanish(errorMsg);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(errorMsg),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    } on SocketException catch (_) {
+      if (!mounted) return;
+      await _ttsService.stopAll();
+      const errorMsg = 'Sin conexión a internet. Verifica tu red e intenta de nuevo.';
+      setState(() {
+        _isConsulting = false;
+        _errorMessage = errorMsg;
+      });
+      HapticService.error();
+      _announce(errorMsg);
+      await _ttsService.speakSpanish(errorMsg);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(errorMsg),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    } on TimeoutException catch (_) {
+      if (!mounted) return;
+      await _ttsService.stopAll();
+      const errorMsg = 'Tiempo de espera agotado al consultar al tutor. Verifica tu conexión e intenta de nuevo.';
+      setState(() {
+        _isConsulting = false;
+        _errorMessage = errorMsg;
+      });
+      HapticService.error();
+      _announce(errorMsg);
+      await _ttsService.speakSpanish(errorMsg);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(errorMsg),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
+      await _ttsService.stopAll();
+      debugPrint('Error genérico (oculto en UI): $e');
       final error = _formatearMensajeErrorAccesible(e.toString());
       setState(() {
         _isConsulting = false;
@@ -260,10 +352,13 @@ class _TutorVozScreenState extends State<TutorVozScreen>
     }
   }
 
-  /// Transforma cualquier excepción técnica o error del servidor en un mensaje accesible y comprensible (WCAG 2.2 AA).
+  /// Transforma cualquier excepción técnica o error del servidor en un mensaje accesible y comprensible (WCAG 2.2 AA),
+  /// sin enmascarar errores reales de configuración o HTTP bajo un falso "alta demanda".
   String _formatearMensajeErrorAccesible(String? errorRaw) {
+    debugPrint('>>> [AIRSIGHT TUTOR ERROR]: $errorRaw');
+
     if (errorRaw == null || errorRaw.trim().isEmpty) {
-      return 'El tutor presenta alta demanda temporal. Por favor, intenta de nuevo en un momento.';
+      return 'No se recibió respuesta del tutor de voz. Por favor, intenta de nuevo.';
     }
 
     final lower = errorRaw.toLowerCase();
@@ -284,8 +379,49 @@ class _TutorVozScreenState extends State<TutorVozScreen>
       return 'Se requiere conexión a internet para utilizar este servicio';
     }
 
-    // Congestión temporal 503 ("high demand"), 404 u otras excepciones técnicas del SDK:
-    return 'El tutor presenta alta demanda temporal. Por favor, intenta de nuevo en un momento.';
+    // Timeout de red:
+    if (lower.contains('timeoutexception') || lower.contains('timed out')) {
+      return 'Tiempo de espera agotado al consultar al tutor. Verifica tu conexión e intenta de nuevo.';
+    }
+
+    // Congestión real 503 / 429 ("high demand" / "unavailable" / "quota") o stub de prueba unitaria:
+    if (lower.contains('503') ||
+        lower.contains('429') ||
+        lower.contains('high demand') ||
+        lower.contains('unavailable') ||
+        lower.contains('resource_exhausted') ||
+        lower.contains('tu_api_key_aqui')) {
+      return 'El tutor presenta alta demanda temporal. Por favor, intenta de nuevo en un momento.';
+    }
+
+    // Errores de cliente, conexión abortada o SocketException
+    if (lower.contains('clientexception') ||
+        lower.contains('software caused connection abort') ||
+        lower.contains('connection abort') ||
+        lower.contains('connection closed') ||
+        lower.contains('connection reset')) {
+      return 'Hubo un problema de conexión. Por favor verifica tu acceso a internet e intenta nuevamente.';
+    }
+
+    // Errores HTTP o de autenticación: mensaje amigable que nunca filtra la URL con API Key
+    if (lower.contains('fallo http') ||
+        lower.contains('api_key') ||
+        lower.contains('400') ||
+        lower.contains('401') ||
+        lower.contains('403') ||
+        lower.contains('404')) {
+      return 'El servicio no está disponible en este momento. Intenta de nuevo en unos segundos.';
+    }
+
+    // Sanitización defensiva: si el mensaje crudo contiene indicios de URLs, claves o trazas técnicas, reemplazar
+    if (lower.contains('http') ||
+        lower.contains('key=') ||
+        lower.contains('exception') ||
+        lower.contains('generativelanguage')) {
+      return 'El servicio no está disponible en este momento. Intenta de nuevo en unos segundos.';
+    }
+
+    return errorRaw.trim();
   }
 
   @override
@@ -618,11 +754,13 @@ class _TutorVozScreenState extends State<TutorVozScreen>
                 result: result,
                 onReplayFull: () {
                   HapticService.selection();
-                  _ttsService.speakVoiceAssistantResponse(
-                    explanationEs: result.explanation ??
-                        '${result.term} significa ${result.translation}.',
-                    exampleEn: result.exampleEn ?? '',
-                    exampleEs: result.exampleEs ?? '',
+                  _ttsService.speakTutorStandardResponse(
+                    wordEn: result.wordOrTerm ?? '',
+                    wordEs: result.translation ?? '',
+                    phonetic: result.phonetic,
+                    explanationEs: result.explanation,
+                    exampleEn: result.exampleEn,
+                    exampleEs: result.exampleEs,
                   );
                 },
                 onPlayEnglish: () {

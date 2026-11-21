@@ -137,23 +137,45 @@ void main() {
   // HU-03: Reconocimiento e Identificación Multimodal de Objetos A1 (RF-03)
   // ===========================================================================
   group('HU-03: Reconocimiento de Objetos con IA y Umbral de Confianza (RF-03)', () {
-    test('Umbral de confianza mínimo normado al 70% (0.70) en inferencia visual', () {
-      const umbralMinimo = 0.70;
-      expect(umbralMinimo, greaterThanOrEqualTo(0.70));
+    test('Umbral de confianza mínimo normado al 70% (0.70) y validación contra catálogo A1', () {
+      expect(GeminiService.umbralConfianzaMinimo, equals(0.70));
 
-      final resultadoExitoso = GeminiObjectResult.success(
-        wordEn: 'backpack',
-        wordEs: 'mochila',
-        exampleSentence: 'My backpack is on the desk.',
-        exampleSentenceEs: 'Mi mochila está sobre el escritorio.',
-        category: 'School',
+      // 1) Descarta confidence score < 0.70
+      final bajoUmbral = GeminiService.validarResultadoVisionA1({
+        'exito': true,
+        'confidence': 0.69,
+        'palabraIngles': 'backpack',
+      });
+      expect(bajoUmbral['exito'], isFalse);
+      expect(
+        bajoUmbral['mensaje'],
+        equals('Objeto no reconocido o no disponible en el glosario A1'),
       );
 
-      expect(resultadoExitoso.isRecognized, isTrue);
-      expect(resultadoExitoso.wordEn, equals('backpack'));
-      expect(resultadoExitoso.wordEs, equals('mochila'));
-      expect(resultadoExitoso.exampleEn, equals('My backpack is on the desk.'));
-      expect(resultadoExitoso.exampleEs, equals('Mi mochila está sobre el escritorio.'));
+      // 2) Descarta etiqueta que no esté en el catálogo A1 aunque tenga alta confianza
+      final fueraDeCatalogo = GeminiService.validarResultadoVisionA1({
+        'exito': true,
+        'confidence': 0.95,
+        'palabraIngles': 'skyscraper',
+      });
+      expect(fueraDeCatalogo['exito'], isFalse);
+      expect(
+        fueraDeCatalogo['mensaje'],
+        equals('Objeto no reconocido o no disponible en el glosario A1'),
+      );
+
+      // 3) Éxito cuando confidence >= 0.70 y pertenece al catálogo A1
+      final valido = GeminiService.validarResultadoVisionA1({
+        'exito': true,
+        'confidence': 0.85,
+        'palabraIngles': 'backpack',
+        'traduccionEspanol': 'mochila',
+        'fraseIngles': 'My backpack is on the desk.',
+        'fraseEspanol': 'Mi mochila está sobre el escritorio.',
+        'categoria': 'School',
+      });
+      expect(valido['exito'], isTrue);
+      expect(valido['palabraIngles'], equals('backpack'));
     });
 
     test('Control de excepciones: mensaje de contingencia estricto ante objeto no reconocido', () {

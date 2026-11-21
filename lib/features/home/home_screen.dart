@@ -1,4 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/haptic_service.dart';
@@ -59,9 +59,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
 
     if (studentName.isNotEmpty) {
-      await _ttsService.speakSpanish('Bienvenido de nuevo, $studentName.');
+      await _ttsService.speakWelcome('Bienvenido de nuevo, $studentName.');
     } else {
-      await _ttsService.speakSpanish('Bienvenido de nuevo.');
+      await _ttsService.speakWelcome('Bienvenido de nuevo.');
     }
   }
 
@@ -208,15 +208,18 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Módulos principales',
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.4,
-                    color: AppTheme.textPrimary,
+                const Expanded(
+                  child: Text(
+                    'Módulos principales',
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.4,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -290,21 +293,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
+                                    Wrap(
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      spacing: 8,
+                                      runSpacing: 4,
                                       children: [
-                                        Flexible(
-                                          child: Text(
-                                            item.title,
-                                            style: const TextStyle(
-                                              fontSize: 17,
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: -0.3,
-                                              color: AppTheme.textPrimary,
-                                            ),
+                                        Text(
+                                          item.title,
+                                          style: const TextStyle(
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: -0.3,
+                                            color: AppTheme.textPrimary,
                                           ),
                                         ),
-                                        if (item.badgeText != null) ...[
-                                          const SizedBox(width: 8),
+                                        if (item.badgeText != null)
                                           Container(
                                             padding: const EdgeInsets.symmetric(
                                               horizontal: 8,
@@ -323,7 +326,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                               ),
                                             ),
                                           ),
-                                        ],
                                       ],
                                     ),
                                     const SizedBox(height: 5),

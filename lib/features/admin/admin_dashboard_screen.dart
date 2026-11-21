@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/haptic_service.dart';
 import '../../services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/user_model.dart';
@@ -108,7 +110,50 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
+  void _announce(String message) {
+    // ignore: deprecated_member_use
+    SemanticsService.announce(message, TextDirection.ltr);
+  }
 
+  Future<void> _confirmLogout() async {
+    await HapticService.selection();
+    _announce('Confirmar cierre de sesión. ¿Estás seguro de que deseas salir de tu cuenta de AirSight?');
+
+    if (!mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmar cierre de sesión'),
+        content: const Text('¿Estás seguro de que deseas salir de tu cuenta de AirSight?'),
+        actions: [
+          TextButton(
+            autofocus: true,
+            style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+            onPressed: () {
+              HapticService.selection();
+              Navigator.pop(ctx, false);
+            },
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              minimumSize: const Size(48, 48),
+            ),
+            onPressed: () {
+              HapticService.buttonPress();
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('Cerrar sesión'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _logout();
+    }
+  }
 
   Future<void> _logout() async {
     await _authService.signOut();
@@ -521,7 +566,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
             // d) BOTÓN DE CERRAR SESIÓN
             ElevatedButton.icon(
-              onPressed: _logout,
+              onPressed: _confirmLogout,
               icon: const Icon(Icons.logout_rounded),
               label: const Text('Cerrar sesión'),
               style: ElevatedButton.styleFrom(

@@ -5,10 +5,16 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 
 import '../config/api_config.dart';
+import '../features/glossary/glossary_data.dart';
+import '../features/glossary/glossary_repository.dart';
+import '../features/glossary/glossary_word.dart';
+import 'gemini_flash_api_service.dart';
+
+export 'gemini_flash_api_service.dart';
 
 /// Resultado estructurado de la inferencia visual de objetos A1 con Gemini Flash.
 class GeminiObjectResult {
@@ -18,6 +24,7 @@ class GeminiObjectResult {
   final String? exampleSentence;
   final String? exampleSentenceEs;
   final String? category;
+  final double? confidence;
   final String? errorMessage;
 
   const GeminiObjectResult({
@@ -27,6 +34,7 @@ class GeminiObjectResult {
     this.exampleSentence,
     this.exampleSentenceEs,
     this.category,
+    this.confidence,
     this.errorMessage,
   });
 
@@ -35,8 +43,13 @@ class GeminiObjectResult {
   String? get exampleEn => exampleSentence;
   String? get exampleEs => exampleSentenceEs;
 
-  factory GeminiObjectResult.error(String message) => GeminiObjectResult(
+  factory GeminiObjectResult.error(
+    String message, {
+    double? confidence,
+  }) =>
+      GeminiObjectResult(
         isRecognized: false,
+        confidence: confidence,
         errorMessage: message,
       );
 
@@ -46,6 +59,7 @@ class GeminiObjectResult {
     required String exampleSentence,
     String? exampleSentenceEs,
     String? category,
+    double? confidence,
   }) =>
       GeminiObjectResult(
         isRecognized: true,
@@ -54,6 +68,7 @@ class GeminiObjectResult {
         exampleSentence: exampleSentence,
         exampleSentenceEs: exampleSentenceEs,
         category: category,
+        confidence: confidence,
       );
 
   Map<String, dynamic> toMap() {
@@ -64,6 +79,7 @@ class GeminiObjectResult {
       'exampleSentence': exampleSentence,
       'exampleSentenceEs': exampleSentenceEs,
       'category': category,
+      if (confidence != null) 'confidence': confidence,
       'errorMessage': errorMessage,
     };
   }
@@ -176,7 +192,6 @@ class ResultadoValidacionPalabra {
         palabraExtraida = '';
 }
 
-/// Servicio de integración oficial con Gemini (Google AI Studio) usando `google_generative_ai`.
 /// Maneja dos flujos diferenciados de manera 100% transparente y accesible:
 /// 1. Cámara (Restringido): Inferencia visual limitada al catálogo controlado A1 de objetos cotidianos.
 /// 2. Búsqueda por Voz (Abierto): Asistente de traducción que responde a consultas en lenguaje natural.
@@ -185,21 +200,317 @@ class GeminiService {
   factory GeminiService() => _instance;
   static GeminiService get instance => _instance;
 
-  static const String defaultModel = 'gemini-flash-lite-latest';
+  // Modelo oficial del proyecto AirSight: gemini-3.8-flash
+  static const String defaultModel = 'gemini-3.8-flash';
+  static const String _baseUrl =
+      'https://generativelanguage.googleapis.com/v1beta/models/$defaultModel:generateContent';
 
-  /// Lista de modelos de alta disponibilidad ordenada por estabilidad y menor congestión (evita 503)
+  static String get baseUrl => _baseUrl;
+
+  /// Lista de modelos de alta disponibilidad ordenada por estabilidad y menor congestión (evita 503/404)
   static const List<String> modelosCandidatos = [
-    'gemini-flash-lite-latest',
-    'gemini-3.5-flash-lite',
-    'gemini-flash-latest',
+    'gemini-3.5-flash',
+    'gemini-3.6-flash',
+    'gemini-3-flash-preview',
     'gemini-3.8-flash',
+    'gemini-3.1-flash-lite',
     'gemini-2.5-flash',
+    'gemini-2.0-flash',
     'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
     'gemini-1.5-flash-8b',
   ];
 
   /// Alias de compatibilidad hacia la lista de modelos
   static List<String> get modelosDisponibles => modelosCandidatos;
+
+  /// Comprime y redimensiona la imagen en memoria volátil (máx 800px, JPEG calidad 65%)
+  /// para reducir el tamaño del payload Base64 a < 150 KB, eliminando timeouts y latencia.
+  static Uint8List comprimirImagenParaInferencia(
+    Uint8List rawBytes, {
+    int maxDimension = 800,
+    int quality = 65,
+  }) {
+    try {
+      final decoded = img.decodeImage(rawBytes);
+      if (decoded == null) return rawBytes;
+
+      img.Image processed = decoded;
+      if (decoded.width > maxDimension || decoded.height > maxDimension) {
+        if (decoded.width >= decoded.height) {
+          processed = img.copyResize(decoded, width: maxDimension);
+        } else {
+          processed = img.copyResize(decoded, height: maxDimension);
+        }
+      }
+
+      final compressed = Uint8List.fromList(
+        img.encodeJpg(processed, quality: quality),
+      );
+      debugPrint(
+        '>>> [AIRSIGHT IMAGE COMPRESSION] Original: ${rawBytes.length} bytes -> Comprimida: ${compressed.length} bytes (${processed.width}x${processed.height}, quality $quality%)',
+      );
+      return compressed;
+    } catch (e) {
+      debugPrint('>>> [AIRSIGHT IMAGE COMPRESSION WARNING]: $e');
+      return rawBytes;
+    }
+  }
+
+  /// Extrae y limpia una cadena JSON eliminando bloques markdown (```json ... ```)
+  /// y recortando texto residual antes del primer '{' y después del último '}'.
+  static String extractCleanJson(String rawText) {
+    String cleaned = rawText.replaceAll(RegExp(r'```json|```'), '').trim();
+    final firstBrace = cleaned.indexOf('{');
+    final lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace != -1 && lastBrace != -1 && lastBrace >= firstBrace) {
+      cleaned = cleaned.substring(firstBrace, lastBrace + 1).trim();
+    }
+    return cleaned;
+  }
+
+  /// Extrae el valor de un campo clave en un JSON crudo o truncado mediante expresiones regulares (Fallback defensivo).
+  static String? extractRegex(String source, String key) {
+    // 1. Busca clave con comillas cerradas: "key": "value"
+    final closedPattern = RegExp(
+      '"$key"\\s*:\\s*"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"',
+      caseSensitive: false,
+    );
+    final closedMatch = closedPattern.firstMatch(source);
+    if (closedMatch != null && closedMatch.groupCount >= 1) {
+      return closedMatch
+          .group(1)
+          ?.replaceAll(r'\"', '"')
+          .replaceAll(r'\n', ' ')
+          .trim();
+    }
+
+    // 2. Fallback para cadenas truncadas antes de cerrar comillas (ej: "respuesta": "texto incompleto...)
+    final unclosedPattern = RegExp(
+      '"$key"\\s*:\\s*"([^"\\r\\n}]+)',
+      caseSensitive: false,
+    );
+    final unclosedMatch = unclosedPattern.firstMatch(source);
+    if (unclosedMatch != null && unclosedMatch.groupCount >= 1) {
+      return unclosedMatch
+          .group(1)
+          ?.replaceAll(r'\"', '"')
+          .replaceAll(r'\n', ' ')
+          .trim();
+    }
+
+    // 3. Fallback para números o booleanos: "key": 0.95 o "key": true
+    final numBoolPattern = RegExp(
+      '"$key"\\s*:\\s*([0-9.]+|true|false)',
+      caseSensitive: false,
+    );
+    final numBoolMatch = numBoolPattern.firstMatch(source);
+    if (numBoolMatch != null && numBoolMatch.groupCount >= 1) {
+      return numBoolMatch.group(1)?.trim();
+    }
+
+    return null;
+  }
+
+  /// Umbral de confianza mínimo exigido para el reconocimiento visual según IEEE 830 RF-03.b (70% / 0.70)
+  static const double umbralConfianzaMinimo = 0.70;
+
+  /// Mensaje de contingencia estricto ante objeto no reconocido o fuera del glosario A1 según IEEE 830 RF-03.e
+  static const String mensajeObjetoNoReconocido =
+      'Objeto no reconocido o no disponible en el glosario A1';
+
+  /// Busca y empareja una etiqueta detectada contra el catálogo controlado de vocabulario A1 (RF-03.c).
+  /// Prioriza coincidencia exacta en inglés (`wordEn`), luego en español (`wordEs`), y finalmente en `aliases`/`etiquetasIA`.
+  static GlossaryWord? buscarPalabraEnCatalogoA1(
+    String etiqueta, {
+    List<GlossaryWord>? catalogo,
+  }) {
+    final cleanLabel = GlossaryWord.normalize(etiqueta);
+    if (cleanLabel.isEmpty) return null;
+
+    final listaCatalogo = catalogo ?? glossaryWords;
+
+    // 1. Coincidencia exacta con el término principal en inglés (wordEn)
+    for (final w in listaCatalogo) {
+      if (GlossaryWord.normalize(w.wordEn) == cleanLabel) {
+        return w;
+      }
+    }
+
+    // 2. Coincidencia exacta con la traducción principal en español (wordEs)
+    for (final w in listaCatalogo) {
+      if (GlossaryWord.normalize(w.wordEs) == cleanLabel) {
+        return w;
+      }
+    }
+
+    // 3. Coincidencia con aliases o etiquetas de visión artificial (etiquetasIA)
+    for (final w in listaCatalogo) {
+      if (w.matchesAiLabel(cleanLabel)) {
+        return w;
+      }
+    }
+
+    return null;
+  }
+
+  /// Verifica si una etiqueta pertenece al catálogo controlado de vocabulario A1 (RF-03.c).
+  static bool esEtiquetaValidaA1(
+    String etiqueta, {
+    List<GlossaryWord>? catalogo,
+  }) {
+    return buscarPalabraEnCatalogoA1(etiqueta, catalogo: catalogo) != null;
+  }
+
+  /// Valida estrictamente la inferencia de visión para el requerimiento RF-03:
+  /// 1) Descarta cualquier objeto con confidence score menor a 0.70.
+  /// 2) Valida la etiqueta contra el catálogo/array de vocabulario A1.
+  /// 3) Si falla cualquiera de las dos condiciones anteriores, devuelve estrictamente
+  ///    el string 'Objeto no reconocido o no disponible en el glosario A1'.
+  static String validarDeteccionRF03({
+    required String etiqueta,
+    required double confidence,
+    List<GlossaryWord>? catalogo,
+  }) {
+    final double normalizedConfidence =
+        (confidence > 1.0 && confidence <= 100.0) ? confidence / 100.0 : confidence;
+
+    if (normalizedConfidence.isNaN || normalizedConfidence < umbralConfianzaMinimo) {
+      return mensajeObjetoNoReconocido;
+    }
+
+    final matchedWord = buscarPalabraEnCatalogoA1(etiqueta, catalogo: catalogo);
+    if (matchedWord == null) {
+      return mensajeObjetoNoReconocido;
+    }
+
+    return matchedWord.wordEn.toLowerCase();
+  }
+
+  /// Valida y estructura el mapa JSON de respuesta del clasificador visual según RF-03:
+  /// 1) Verifica que el confidence score sea >= 0.70 (descarta si < 0.70).
+  /// 2) Valida la etiqueta detectada contra el catálogo/array de vocabulario A1 (`glossaryWords`).
+  /// 3) Si falla cualquiera de las dos condiciones, retorna `'exito': false` y estrictamente
+  ///    `'mensaje': 'Objeto no reconocido o no disponible en el glosario A1'`.
+  static Map<String, dynamic> validarResultadoVisionA1(
+    Map<String, dynamic> jsonMap, {
+    List<GlossaryWord>? catalogo,
+  }) {
+    final bool exito = (jsonMap['exito'] == true) ||
+        (jsonMap['recognized'] == true && jsonMap['exito'] != false);
+
+    if (!exito) {
+      return {
+        'exito': false,
+        'mensaje': mensajeObjetoNoReconocido,
+      };
+    }
+
+    // 1. Extracción y validación estricta del confidence score (>= 0.70) (RF-03.b)
+    final rawConfidence = jsonMap['confidence'] ??
+        jsonMap['confidenceScore'] ??
+        jsonMap['confianza'] ??
+        jsonMap['score'];
+
+    double? parsedConfidence;
+    if (rawConfidence is num) {
+      parsedConfidence = rawConfidence.toDouble();
+    } else if (rawConfidence is String) {
+      final cleanedConf = rawConfidence.trim().replaceAll('%', '');
+      parsedConfidence = double.tryParse(cleanedConf);
+      if (parsedConfidence != null && rawConfidence.contains('%') && parsedConfidence > 1.0) {
+        parsedConfidence = parsedConfidence / 100.0;
+      }
+    }
+
+    if (parsedConfidence != null && parsedConfidence > 1.0 && parsedConfidence <= 100.0) {
+      parsedConfidence = parsedConfidence / 100.0;
+    }
+
+    if (parsedConfidence == null ||
+        parsedConfidence.isNaN ||
+        parsedConfidence < umbralConfianzaMinimo) {
+      return {
+        'exito': false,
+        'confidence': parsedConfidence ?? 0.0,
+        'mensaje': mensajeObjetoNoReconocido,
+      };
+    }
+
+    // 2. Extracción y validación de la etiqueta contra el catálogo/array de vocabulario A1 (RF-03.c)
+    final rawPalabraIngles = (jsonMap['palabraIngles'] as String? ??
+            jsonMap['wordEn'] as String? ??
+            jsonMap['label'] as String? ??
+            jsonMap['etiqueta'] as String? ??
+            '')
+        .trim();
+    final rawTraduccionEspanol = (jsonMap['traduccionEspanol'] as String? ??
+            jsonMap['wordEs'] as String? ??
+            '')
+        .trim();
+
+    GlossaryWord? matchedWord = buscarPalabraEnCatalogoA1(
+      rawPalabraIngles,
+      catalogo: catalogo,
+    );
+    if (matchedWord == null && rawPalabraIngles.isEmpty && rawTraduccionEspanol.isNotEmpty) {
+      matchedWord = buscarPalabraEnCatalogoA1(
+        rawTraduccionEspanol,
+        catalogo: catalogo,
+      );
+    }
+
+    // 3. Si la etiqueta no pertenece al catálogo A1, devolver estrictamente el string normado (RF-03.e)
+    if (matchedWord == null) {
+      return {
+        'exito': false,
+        'confidence': parsedConfidence,
+        'mensaje': mensajeObjetoNoReconocido,
+      };
+    }
+
+    final palabraIngles = matchedWord.wordEn.trim().toLowerCase();
+    final traduccionEspanol = rawTraduccionEspanol.isNotEmpty
+        ? rawTraduccionEspanol.toLowerCase()
+        : matchedWord.wordEs.trim().toLowerCase();
+    final categoria = (jsonMap['categoria'] as String? ??
+            jsonMap['category'] as String? ??
+            matchedWord.category)
+        .trim();
+    final fraseIngles = (jsonMap['fraseIngles'] as String? ??
+            jsonMap['exampleSentence'] as String? ??
+            matchedWord.exampleEn)
+        .trim();
+    final fraseEspanol = (jsonMap['fraseEspanol'] as String? ??
+            jsonMap['exampleSentenceEs'] as String? ??
+            matchedWord.exampleEs)
+        .trim();
+
+    return {
+      'exito': true,
+      'confidence': parsedConfidence,
+      'palabraIngles': palabraIngles,
+      'traduccionEspanol': traduccionEspanol,
+      'categoria': categoria.isNotEmpty ? categoria : matchedWord.category,
+      'fraseIngles': fraseIngles.isNotEmpty ? fraseIngles : matchedWord.exampleEn,
+      'fraseEspanol': fraseEspanol.isNotEmpty ? fraseEspanol : matchedWord.exampleEs,
+    };
+  }
+
+  /// Procesa una cadena JSON cruda proveniente del clasificador visual aplicando las reglas de RF-03.
+  static Map<String, dynamic> parseObjectJsonResponse(
+    String rawText, {
+    List<GlossaryWord>? catalogo,
+  }) {
+    if (rawText.trim().isEmpty) {
+      return {
+        'exito': false,
+        'mensaje': mensajeObjetoNoReconocido,
+      };
+    }
+    final jsonMap = _parseJsonResponse(rawText);
+    return validarResultadoVisionA1(jsonMap, catalogo: catalogo);
+  }
 
   /// Mensaje de contingencia estricto según IEEE 830 v3.2 (RF-11.e y Apéndice B.5.2)
   static const String mensajeContingenciaPalabraUnica =
@@ -300,7 +611,11 @@ class GeminiService {
     if (_apiKeyOverride != null && _apiKeyOverride!.isNotEmpty) {
       return _apiKeyOverride!;
     }
-    return ApiConfig.geminiApiKey;
+    final configKey = ApiConfig.geminiApiKey;
+    if (configKey.isNotEmpty && configKey != 'CI_STUB_KEY' && configKey != 'TU_API_KEY_AQUI') {
+      return configKey;
+    }
+    return GeminiFlashApiService.apiKey;
   }
 
   /// Permite sobrescribir la clave en memoria (utilizado exclusivamente en tests)
@@ -315,85 +630,73 @@ class GeminiService {
 
   String get modelName => _modelName;
 
-  /// Inferencia con tolerancia a fallos, congestión y rotación automática de modelos (Failover).
-  /// Si un modelo arroja error 503 ("high demand" / "UNAVAILABLE"), 404 o indisponibilidad:
-  /// Captura el error en debugPrint e intenta inmediatamente con el siguiente modelo de la lista (hasta 3 intentos).
-  /// Al tener éxito, memoriza el modelo activo para las siguientes llamadas de la sesión.
-  Future<GenerateContentResponse> _generarContenido({
-    required List<Content> content,
+  /// Inferencia HTTP directa con diagnóstico explícito (`GeminiFlashApiService.postGenerateContent`)
+  /// y rotación inmediata ante congestión 503, 429, 404 o Timeout.
+  Future<String> _generarContenidoHttp({
+    required Map<String, dynamic> payload,
     required String apiKey,
-    GenerationConfig? generationConfig,
   }) async {
     final candidatos = <String>[
       _modelName,
       ...modelosCandidatos.where((m) => m != _modelName),
     ];
 
-    const int maxIntentos = 3;
-    final int limite = candidatos.length > maxIntentos ? maxIntentos : candidatos.length;
+    const int maxIntentos = 5;
+    final int limite =
+        candidatos.length > maxIntentos ? maxIntentos : candidatos.length;
 
     dynamic ultimoError;
 
     for (int i = 0; i < limite; i++) {
       final modelo = candidatos[i];
+      try {
+        debugPrint(
+          '[GEMINI] Intento ${i + 1}/$limite con modelo: $modelo',
+        );
+        final cleanText = await GeminiFlashApiService.postGenerateContent(
+          payload: payload,
+          model: modelo,
+          apiKeyOverride: apiKey,
+          timeout: const Duration(seconds: 10),
+        );
 
-      // Hasta 2 intentos por modelo si se recibe un 503 temporal (esperando 1.5s)
-      for (int subIntento = 0; subIntento < 2; subIntento++) {
-        try {
+        if (_modelName != modelo) {
           debugPrint(
-            '[GEMINI] Intento ${i + 1}/$limite (subintento ${subIntento + 1}/2) con modelo: $modelo',
+            '[GEMINI FAILOVER] ¡Éxito con modelo alternativo! Estableciendo como predeterminado: $modelo',
           );
-          final model = GenerativeModel(
-            model: modelo,
-            apiKey: apiKey,
-            generationConfig: generationConfig,
-          );
-          final response = await model.generateContent(content);
-
-          // Si tuvo éxito y fue un modelo diferente, memorizarlo para la sesión
-          if (_modelName != modelo) {
-            debugPrint(
-              '[GEMINI FAILOVER] ¡Éxito con modelo alternativo! Estableciendo como predeterminado: $modelo',
-            );
-            _modelName = modelo;
-          }
-          return response;
-        } catch (e) {
-          ultimoError = e;
-          final errorStr = e.toString().toLowerCase();
-
-          final es503 = errorStr.contains('503') ||
-              errorStr.contains('high demand') ||
-              errorStr.contains('unavailable');
-
-          // Manejo de saturación 503: espera 1.5s y realiza reintento inmediato en el mismo modelo
-          if (es503 && subIntento == 0) {
-            debugPrint(
-              '[GEMINI] Modelo "$modelo" reportó alta demanda temporal (503). Esperando 1.5s antes del reintento inmediato...',
-            );
-            await Future.delayed(const Duration(milliseconds: 1500));
-            continue;
-          }
-
-          final esRotable = es503 ||
-              errorStr.contains('404') ||
-              errorStr.contains('not found') ||
-              errorStr.contains('not supported');
-
-          if (esRotable && (i + 1 < limite)) {
-            debugPrint(
-              '[GEMINI FAILOVER] Modelo "$modelo" persistió no disponible ($e). '
-              'Rotando inmediatamente al siguiente modelo candidato: ${candidatos[i + 1]}...',
-            );
-            break; // Sale del bucle de subintentos para rotar al siguiente candidato
-          }
-
-          rethrow;
+          _modelName = modelo;
         }
+        return cleanText;
+      } catch (e) {
+        ultimoError = e;
+        final errorStr = e.toString().toLowerCase();
+
+        final esRotable = errorStr.contains('503') ||
+            errorStr.contains('429') ||
+            errorStr.contains('500') ||
+            errorStr.contains('high demand') ||
+            errorStr.contains('unavailable') ||
+            errorStr.contains('404') ||
+            errorStr.contains('not found') ||
+            errorStr.contains('not supported') ||
+            errorStr.contains('timeoutexception');
+
+        if (esRotable && (i + 1 < limite)) {
+          debugPrint(
+            '[GEMINI FAILOVER] Modelo "$modelo" falló ($e). '
+            'Rotando inmediatamente al siguiente modelo candidato: ${candidatos[i + 1]}...',
+          );
+          continue;
+        }
+
+        rethrow;
       }
     }
 
-    throw ultimoError ?? Exception('Ningún modelo candidato pudo procesar la solicitud tras $limite intentos.');
+    throw ultimoError ??
+        Exception(
+          'Ningún modelo candidato pudo procesar la solicitud tras $limite intentos.',
+        );
   }
 
   /// Diagnóstico automático: Descubre por código la lista exacta de modelos activos en Google AI Studio (ListModels)
@@ -441,17 +744,24 @@ class GeminiService {
     return [];
   }
 
-
   /// Diagnóstico rápido de conexión con la API de Gemini (Google AI Studio)
   Future<bool> probarConexionGemini() async {
     final key = activeApiKey;
     print('[GEMINI KEY CHECK]: ${key.length > 6 ? key.substring(0, 6) + "..." : key}');
     try {
-      final response = await _generarContenido(
-        content: [Content.text('Test')],
+      final rawText = await _generarContenidoHttp(
+        payload: {
+          'contents': [
+            {
+              'parts': [
+                {'text': 'Test'},
+              ],
+            },
+          ],
+        },
         apiKey: key,
       );
-      print('[GEMINI TEST EXITOSO con modelo $_modelName]: ${response.text}');
+      print('[GEMINI TEST EXITOSO con modelo $_modelName]: $rawText');
       return true;
     } catch (e) {
       print('[GEMINI TEST FALLIDO]: $e');
@@ -461,20 +771,13 @@ class GeminiService {
   }
 
   /// Inferencia visual multimodal restringida al glosario de objetos cotidianos A1 (IEEE 830 RF-03 / RNF-03).
-  /// Procesa imágenes en memoria como Uint8List (RNF-03) y normaliza al sustantivo más elemental de nivel A1.
-  /// Retorna un mapa canónico con la estructura:
-  /// {
-  ///   "exito": true/false,
-  ///   "palabraIngles": "...",
-  ///   "traduccionEspanol": "...",
-  ///   "categoria": "...",
-  ///   "fraseIngles": "...",
-  ///   "fraseEspanol": "...",
-  ///   "mensaje": "..." // En caso de rechazo o no disponibilidad
-  /// }
+  /// Procesa imágenes en memoria como Uint8List (RNF-03), exige un confidence score >= 0.70 (RF-03.b),
+  /// valida la etiqueta contra el catálogo controlado A1 (RF-03.c) y devuelve estrictamente
+  /// 'Objeto no reconocido o no disponible en el glosario A1' si falla cualquiera de las condiciones (RF-03.e).
   Future<Map<String, dynamic>> identificarObjetoA1(
     Uint8List imageBytes, {
     String? apiKey,
+    List<GlossaryWord>? catalogo,
   }) async {
     if (imageBytes.isEmpty) {
       return {
@@ -495,107 +798,85 @@ class GeminiService {
     }
 
     try {
-      const systemInstruction = '''
-Eres el clasificador visual del proyecto accesible AirSight para estudiantes con discapacidad visual. Tu tarea es identificar el objeto principal en la imagen y asociarlo al vocabulario básico en inglés de nivel A1 dentro de las categorías cotidianas (útiles de estudio, tecnología, objetos de uso personal, alimentos, ropa, hogar, partes del lugar, transporte, etc.).
+      List<GlossaryWord> catalogoActivo;
+      if (catalogo != null) {
+        catalogoActivo = catalogo;
+      } else {
+        try {
+          catalogoActivo = await GlossaryRepository.getWords();
+        } catch (_) {
+          catalogoActivo = glossaryWords;
+        }
+      }
+
+      final listaVocabulario = catalogoActivo
+          .map((w) => w.wordEn.toLowerCase().trim())
+          .toSet()
+          .join(', ');
+
+      final systemInstruction = '''
+Eres el clasificador visual del proyecto accesible AirSight para estudiantes con discapacidad visual (requerimiento RF-03). Tu tarea es identificar el objeto principal en la imagen, estimar tu nivel de confianza (confidence score entre 0.0 y 1.0) y asociarlo exclusivamente al catálogo de vocabulario básico en inglés de nivel A1: [$listaVocabulario].
 
 Reglas estrictas de respuesta:
-1. Si el objeto corresponde a un elemento cotidiano, identifícalo y simplifícalo a su término básico en nivel A1 (ejemplo: si ves un portátil Asus responde "laptop" o "computer"; si ves una silla de oficina responde "chair").
-2. Responde ÚNICAMENTE en este formato JSON válido:
+1. Si el objeto se identifica con un confidence score mayor o igual a 0.70 (70%) y pertenece al catálogo de vocabulario A1, simplifícalo a su término exacto del catálogo A1 (ejemplo: si ves un portátil Asus responde "laptop" o "computer"; si ves una silla de oficina responde "chair") y responde ÚNICAMENTE en JSON válido en una sola línea o sin saltos de línea internos dentro de los valores de texto. Usa comillas dobles y asegura cerrar todas las llaves:
 {
   "exito": true,
+  "confidence": 0.92,
   "palabraIngles": "laptop",
   "traduccionEspanol": "computador portátil",
-  "categoria": "tecnología",
+  "categoria": "Technology",
   "fraseIngles": "The laptop is on the desk.",
   "fraseEspanol": "El computador portátil está en el escritorio."
 }
-3. Si la imagen es borrosa, está totalmente oscura, o el objeto NO pertenece a las categorías cotidianas de nivel A1, responde ÚNICAMENTE:
+2. Si el confidence score es menor a 0.70, la imagen es borrosa/oscura, o el objeto NO pertenece al catálogo de vocabulario A1, responde ÚNICAMENTE:
 {
   "exito": false,
-  "mensaje": "Objeto no reconocido o no disponible en el glosario A1"
+  "confidence": 0.0,
+  "mensaje": "$mensajeObjetoNoReconocido"
 }
 ''';
 
-      final content = [
-        Content.multi([
-          TextPart('$systemInstruction\nIdentifica el objeto principal de la imagen:'),
-          DataPart('image/jpeg', imageBytes),
-        ]),
-      ];
+      // Optimización crítica de latencia: redimensiona y comprime la captura (máx 800px, quality 65%)
+      final optimizedBytes = comprimirImagenParaInferencia(imageBytes);
+      final base64Image = base64Encode(optimizedBytes);
 
-      final response = await _generarContenido(
-        content: content,
+      final payload = <String, dynamic>{
+        'contents': [
+          {
+            'parts': [
+              {
+                'text':
+                    '$systemInstruction\nIdentifica el objeto principal de la imagen:',
+              },
+              {
+                'inline_data': {
+                  'mime_type': 'image/jpeg',
+                  'data': base64Image,
+                },
+              },
+            ],
+          },
+        ],
+        'generationConfig': {
+          'temperature': 0.2,
+          'maxOutputTokens': 800,
+          'responseMimeType': 'application/json',
+        },
+      };
+
+      final rawText = await _generarContenidoHttp(
+        payload: payload,
         apiKey: key,
-        generationConfig: GenerationConfig(
-          temperature: 0.2,
-          maxOutputTokens: 120,
-          responseMimeType: 'application/json',
-        ),
       );
 
-      final rawText = response.text;
-      if (rawText == null || rawText.trim().isEmpty) {
+      if (rawText.trim().isEmpty) {
         return {
           'exito': false,
-          'mensaje': 'Objeto no reconocido o no disponible en el glosario A1',
+          'mensaje': mensajeObjetoNoReconocido,
         };
       }
 
-      final jsonMap = _parseJsonResponse(rawText);
-      final bool exito = (jsonMap['exito'] == true) ||
-          (jsonMap['recognized'] == true && jsonMap['exito'] != false);
-
-      if (!exito) {
-        final errorMsg = (jsonMap['mensaje'] as String? ??
-                jsonMap['error'] as String? ??
-                'Objeto no reconocido o no disponible en el glosario A1')
-            .trim();
-        return {
-          'exito': false,
-          'mensaje': errorMsg.isNotEmpty
-              ? errorMsg
-              : 'Objeto no reconocido o no disponible en el glosario A1',
-        };
-      }
-
-      final palabraIngles = (jsonMap['palabraIngles'] as String? ??
-              jsonMap['wordEn'] as String? ??
-              '')
-          .trim()
-          .toLowerCase();
-      final traduccionEspanol = (jsonMap['traduccionEspanol'] as String? ??
-              jsonMap['wordEs'] as String? ??
-              '')
-          .trim()
-          .toLowerCase();
-      final categoria = (jsonMap['categoria'] as String? ??
-              jsonMap['category'] as String? ??
-              'Objetos cotidianos')
-          .trim();
-      final fraseIngles = (jsonMap['fraseIngles'] as String? ??
-              jsonMap['exampleSentence'] as String? ??
-              'This is a $palabraIngles.')
-          .trim();
-      final fraseEspanol = (jsonMap['fraseEspanol'] as String? ??
-              jsonMap['exampleSentenceEs'] as String? ??
-              'Esto es un/a $traduccionEspanol.')
-          .trim();
-
-      if (palabraIngles.isEmpty || traduccionEspanol.isEmpty) {
-        return {
-          'exito': false,
-          'mensaje': 'Objeto no reconocido o no disponible en el glosario A1',
-        };
-      }
-
-      return {
-        'exito': true,
-        'palabraIngles': palabraIngles,
-        'traduccionEspanol': traduccionEspanol,
-        'categoria': categoria,
-        'fraseIngles': fraseIngles,
-        'fraseEspanol': fraseEspanol,
-      };
+      return parseObjectJsonResponse(rawText, catalogo: catalogoActivo);
     } on SocketException catch (e) {
       print('[GEMINI ERROR DETALLADO]: Conexión fallida: $e');
       debugPrint('ERROR REAL GEMINI: Conexión fallida: $e');
@@ -606,7 +887,7 @@ Reglas estrictas de respuesta:
       };
     } catch (e) {
       print('[GEMINI ERROR DETALLADO]: ${e.toString()}');
-      debugPrint('ERROR REAL GEMINI: $e');
+      debugPrint('>>> [AIRSIGHT VISION ERROR]: $e');
       final msg = _formatErrorMessage(e);
       final errorLower = e.toString().toLowerCase();
 
@@ -618,7 +899,15 @@ Reglas estrictas de respuesta:
         };
       }
 
+      if (errorLower.contains('timeoutexception') || errorLower.contains('timed out')) {
+        return {
+          'exito': false,
+          'mensaje': 'Tiempo de espera agotado al analizar la imagen. Intenta nuevamente.',
+        };
+      }
+
       if (errorLower.contains('503') ||
+          errorLower.contains('429') ||
           errorLower.contains('unavailable') ||
           errorLower.contains('high demand')) {
         return {
@@ -628,16 +917,19 @@ Reglas estrictas de respuesta:
         };
       }
 
-      if (msg.contains('API_KEY_INVALID') || msg.contains('403') || msg.contains('401')) {
+      if (msg.contains('API_KEY_INVALID') ||
+          msg.contains('403') ||
+          msg.contains('401') ||
+          msg.contains('Fallo HTTP')) {
         return {
           'exito': false,
-          'mensaje': 'Servicio no disponible temporalmente.',
+          'mensaje': 'Error de comunicación con el servicio de IA ($msg).',
         };
       }
 
       return {
         'exito': false,
-        'mensaje': 'Objeto no reconocido o no disponible en el glosario A1',
+        'mensaje': mensajeObjetoNoReconocido,
       };
     }
   }
@@ -647,8 +939,13 @@ Reglas estrictas de respuesta:
     Uint8List imageBytes, {
     String? apiKey,
     String? mimeType,
+    List<GlossaryWord>? catalogo,
   }) async {
-    final result = await identificarObjetoA1(imageBytes, apiKey: apiKey);
+    final result = await identificarObjetoA1(
+      imageBytes,
+      apiKey: apiKey,
+      catalogo: catalogo,
+    );
     if (result['exito'] == true) {
       return GeminiObjectResult.success(
         wordEn: result['palabraIngles'] ?? '',
@@ -656,10 +953,12 @@ Reglas estrictas de respuesta:
         exampleSentence: result['fraseIngles'] ?? '',
         exampleSentenceEs: result['fraseEspanol'],
         category: result['categoria'],
+        confidence: (result['confidence'] as num?)?.toDouble(),
       );
     } else {
       return GeminiObjectResult.error(
-        result['mensaje'] ?? 'Objeto no reconocido o no disponible en el glosario A1',
+        result['mensaje'] ?? mensajeObjetoNoReconocido,
+        confidence: (result['confidence'] as num?)?.toDouble(),
       );
     }
   }
@@ -698,8 +997,6 @@ Reglas estrictas de respuesta:
     }
 
     // 1. VALIDACIÓN LOCAL DEL RF-11 (FILTRO DE PALABRA INDIVIDUAL)
-    // Extrae [X] si viene envuelto en consultas tipo "¿Cómo se dice [X] en inglés?"
-    // Si dicta una oración completa o más de dos palabras sustantivas, rechaza inmediatamente sin llamada a API.
     final validacion = validarConsultaPalabraIndividual(query);
     if (!validacion.esValida) {
       return GeminiVoiceResult.error(
@@ -741,7 +1038,8 @@ Reglas estrictas de respuesta pedagógica (Nivel A1):
    - Si la intención es "howToSay" ("¿Cómo se dice...?"): Entrega la traducción directa en inglés, significado en español y frase corta de ejemplo nivel A1.
    - Si la intención es "whatDoesItMean" ("¿Qué significa...?"): Entrega la traducción directa al español y un breve contexto pedagógico de uso.
    - Si la intención es "howToPronounce" ("¿Cómo se pronuncia...?"): Entrega la transcripción fonética legible clara (ej: /'æpl/ o á-pl) y explicación amigable para síntesis oral.
-Responde ÚNICAMENTE en este formato JSON:
+
+Responde ÚNICAMENTE en JSON válido en una sola línea o sin saltos de línea internos dentro de los valores de texto. Usa comillas dobles y asegura cerrar todas las llaves:
 {
   "exito": true,
   "terminoConsultado": "$palabraAEnviar",
@@ -753,17 +1051,25 @@ Responde ÚNICAMENTE en este formato JSON:
 }
 ''';
 
-      final response = await _generarContenido(
-        content: [Content.text(promptText)],
+      final payload = <String, dynamic>{
+        'contents': [
+          {
+            'parts': [
+              {'text': promptText},
+            ],
+          },
+        ],
+        'generationConfig': {
+          'temperature': 0.2,
+          'maxOutputTokens': 800, // Evita truncamiento del JSON pedagógico
+          'responseMimeType': 'application/json',
+        },
+      };
+
+      final rawText = await _generarContenidoHttp(
+        payload: payload,
         apiKey: key,
-        generationConfig: GenerationConfig(
-          temperature: 0.2,
-          maxOutputTokens: 120, // Evita respuestas largas y reduce el tiempo a menos de 1 segundo
-          responseMimeType: 'application/json',
-        ),
       );
-      String rawText = response.text ?? '';
-      rawText = rawText.replaceAll('```json', '').replaceAll('```', '').trim();
 
       return parseVoiceJsonResponse(rawText, query, intent: intencion);
     } on SocketException catch (e) {
@@ -776,7 +1082,7 @@ Responde ÚNICAMENTE en este formato JSON:
       );
     } catch (e) {
       print('[GEMINI ERROR DETALLADO]: ${e.toString()}');
-      debugPrint('ERROR REAL GEMINI: $e');
+      debugPrint('>>> [AIRSIGHT TUTOR ERROR]: $e');
       return GeminiVoiceResult.error(
         query: query,
         message: e.toString(),
@@ -787,7 +1093,7 @@ Responde ÚNICAMENTE en este formato JSON:
 
   /// Procesa y deserializa la respuesta del Tutor de Voz con Gemini.
   /// Cumple estrictamente con el estándar IEEE 830 v3.2 (RF-11 y Apéndice B.5.2),
-  /// soportando tanto la nomenclatura canónica del apéndice como claves legadas.
+  /// soportando tanto la nomenclatura canónica del apéndice como claves legadas y fallbacks por Regex.
   static GeminiVoiceResult parseVoiceJsonResponse(
     String rawText,
     String query, {
@@ -805,7 +1111,8 @@ Responde ÚNICAMENTE en este formato JSON:
 
     final jsonMap = _parseJsonResponse(rawText);
     final bool exito = (jsonMap['exito'] == true) ||
-        (jsonMap['success'] == true && jsonMap['exito'] != false);
+        (jsonMap['success'] == true && jsonMap['exito'] != false) ||
+        (jsonMap['terminoConsultado'] != null || jsonMap['traduccionIngles'] != null);
 
     if (!exito) {
       final errorMsg = (jsonMap['mensaje'] as String? ??
@@ -855,6 +1162,7 @@ Responde ÚNICAMENTE en este formato JSON:
             '')
         .trim();
     final explanation = (jsonMap['respuestaHablada'] as String? ??
+            jsonMap['respuesta'] as String? ??
             jsonMap['explanation'] as String? ??
             '')
         .trim();
@@ -874,12 +1182,14 @@ Responde ÚNICAMENTE en este formato JSON:
   }
 
   /// Limpia y decodifica respuestas JSON que puedan venir dentro de bloques markdown ```json ... ```
+  /// o sufrir de truncamiento ('FormatException: Unterminated string') aplicando fallback defensivo por Regex.
   static Map<String, dynamic> _parseJsonResponse(String raw) {
-    String rawText = raw.replaceAll('```json', '').replaceAll('```', '').trim();
-    final firstBrace = rawText.indexOf('{');
-    final lastBrace = rawText.lastIndexOf('}');
-    if (firstBrace != -1 && lastBrace != -1 && lastBrace >= firstBrace) {
-      rawText = rawText.substring(firstBrace, lastBrace + 1).trim();
+    // 1. Limpieza de bloques markdown
+    String rawText = raw.replaceAll(RegExp(r'```json|```'), '').trim();
+    rawText = extractCleanJson(rawText);
+
+    if (rawText.isEmpty) {
+      return {'error': 'Cadena JSON vacía tras limpieza', 'exito': false};
     }
 
     try {
@@ -888,8 +1198,72 @@ Responde ÚNICAMENTE en este formato JSON:
         return decoded;
       }
       return {'error': 'Formato inesperado: el JSON decodificado no es un Map', 'exito': false};
-    } catch (e) {
-      return {'error': 'FormatException al decodificar JSON: $e (Texto: "$rawText")', 'exito': false};
+    } catch (e, stacktrace) {
+      debugPrint('>>> [JSON ERROR RAW]: $rawText');
+      debugPrint('>>> [JSON ERROR]: $e');
+      debugPrint('>>> [STACKTRACE]: $stacktrace');
+
+      // FALLBACK DE EMERGENCIA: Si el JSON viene incompleto (Unterminated string)
+      // o con saltos de línea internos sin escapar, extrae los datos clave mediante regex.
+      final fallbackMap = <String, dynamic>{
+        'recuperadoPorRegex': true,
+      };
+
+      final exitoVal = extractRegex(rawText, 'exito');
+      if (exitoVal != null) {
+        fallbackMap['exito'] = exitoVal.toLowerCase() == 'true';
+      }
+
+      final term = extractRegex(rawText, 'terminoConsultado') ??
+          extractRegex(rawText, 'term') ??
+          extractRegex(rawText, 'wordEn') ??
+          extractRegex(rawText, 'palabraIngles');
+      if (term != null) fallbackMap['terminoConsultado'] = term;
+
+      final trad = extractRegex(rawText, 'traduccionIngles') ??
+          extractRegex(rawText, 'translation') ??
+          extractRegex(rawText, 'wordEs') ??
+          extractRegex(rawText, 'traduccionEspanol');
+      if (trad != null) fallbackMap['traduccionIngles'] = trad;
+
+      final fon = extractRegex(rawText, 'fonetica') ?? extractRegex(rawText, 'phonetic');
+      if (fon != null) fallbackMap['fonetica'] = fon;
+
+      final fraseEn = extractRegex(rawText, 'fraseEjemploIngles') ??
+          extractRegex(rawText, 'exampleEn') ??
+          extractRegex(rawText, 'exampleSentence');
+      if (fraseEn != null) fallbackMap['fraseEjemploIngles'] = fraseEn;
+
+      final fraseEs = extractRegex(rawText, 'fraseEjemploEspanol') ??
+          extractRegex(rawText, 'exampleEs') ??
+          extractRegex(rawText, 'exampleSentenceEs');
+      if (fraseEs != null) fallbackMap['fraseEjemploEspanol'] = fraseEs;
+
+      final resp = extractRegex(rawText, 'respuestaHablada') ??
+          extractRegex(rawText, 'respuesta') ??
+          extractRegex(rawText, 'explanation');
+      if (resp != null) fallbackMap['respuestaHablada'] = resp;
+
+      final mensaje = extractRegex(rawText, 'mensaje') ?? extractRegex(rawText, 'error');
+      if (mensaje != null) fallbackMap['mensaje'] = mensaje;
+
+      final conf = extractRegex(rawText, 'confidence');
+      if (conf != null) fallbackMap['confidence'] = double.tryParse(conf);
+
+      final cat = extractRegex(rawText, 'categoria') ?? extractRegex(rawText, 'category');
+      if (cat != null) fallbackMap['categoria'] = cat;
+
+      // Si se logró extraer término o traducción, habilitamos exito para evitar que la UI colapse
+      if (term != null || trad != null) {
+        fallbackMap['exito'] = true;
+      }
+
+      if (fallbackMap.containsKey('exito') || fallbackMap.containsKey('mensaje')) {
+        debugPrint('>>> [FALLBACK REGEX EXITOSO]: $fallbackMap');
+        return fallbackMap;
+      }
+
+      return {'error': 'FormatException al decodificar JSON: $e', 'exito': false};
     }
   }
 

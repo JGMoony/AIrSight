@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/haptic_service.dart';
@@ -340,6 +341,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _resetPassword() async {
+    await HapticService.buttonPress();
+    if (!mounted) return;
     final email = _user?.email;
     if (email == null || email.isEmpty || !email.contains('@')) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -394,17 +397,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _announce(String message) {
+    // ignore: deprecated_member_use
+    SemanticsService.announce(message, TextDirection.ltr);
+  }
+
   Future<void> _confirmLogout() async {
-    HapticService.selection();
+    await HapticService.selection();
+    _announce('Confirmar cierre de sesión. ¿Estás seguro de que deseas salir de tu cuenta de AirSight?');
+
+    if (!mounted) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('¿Cerrar sesión?'),
-        content: const Text('¿Seguro que deseas salir de tu cuenta de AirSight?'),
+        title: const Text('Confirmar cierre de sesión'),
+        content: const Text('¿Estás seguro de que deseas salir de tu cuenta de AirSight?'),
         actions: [
           TextButton(
+            autofocus: true,
             style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () {
+              HapticService.selection();
+              Navigator.pop(ctx, false);
+            },
             child: const Text('Cancelar'),
           ),
           FilledButton(
@@ -412,7 +427,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               backgroundColor: Colors.red.shade700,
               minimumSize: const Size(48, 48),
             ),
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () {
+              HapticService.buttonPress();
+              Navigator.pop(ctx, true);
+            },
             child: const Text('Cerrar sesión'),
           ),
         ],
@@ -593,10 +611,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: FilledButton.icon(
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
-                        onPressed: _changePasswordDialog,
+                        onPressed: () {
+                          HapticService.buttonPress();
+                          _changePasswordDialog();
+                        },
                         icon: const Icon(Icons.lock_rounded),
-                        label: const Text('Cambiar mi contraseña'),
+                        label: const Flexible(
+                          child: Text(
+                            'Cambiar mi contraseña',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -606,10 +633,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
-                        onPressed: _resetPassword,
+                        onPressed: () {
+                          HapticService.buttonPress();
+                          _resetPassword();
+                        },
                         icon: const Icon(Icons.mail_outline_rounded),
-                        label: const Text('O solicitar enlace por correo'),
+                        label: const Flexible(
+                          child: Text(
+                            'O solicitar enlace por correo',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -673,10 +709,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Velocidad de síntesis de voz',
-                          style: TextStyle(fontWeight: FontWeight.w700),
+                        const Expanded(
+                          child: Text(
+                            'Velocidad de síntesis de voz',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Text(
                           '${(_speechRate * 100).round()}%',
                           style: const TextStyle(
@@ -713,22 +752,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   : const Color(0xFFF1F5F9),
                               side: BorderSide(
                                 color: (_speechRate - 0.40).abs() < 0.02
-                                    ? const Color(0xFF4F46E5)
-                                    : const Color(0xFFCBD5E1),
+                                  ? const Color(0xFF4F46E5)
+                                  : const Color(0xFFCBD5E1),
                                 width: (_speechRate - 0.40).abs() < 0.02 ? 2.0 : 1.5,
                               ),
                               minimumSize: const Size(0, 48),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                             ),
                             onPressed: () => _applySpeechRate(0.40),
-                            child: Text(
-                              'Lento (0.4)',
-                              style: TextStyle(
-                                fontWeight: (_speechRate - 0.40).abs() < 0.02
-                                    ? FontWeight.bold
-                                    : FontWeight.w600,
-                                color: (_speechRate - 0.40).abs() < 0.02
-                                    ? const Color(0xFF312E81)
-                                    : const Color(0xFF334155),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'Lento (0.4)',
+                                style: TextStyle(
+                                  fontWeight: (_speechRate - 0.40).abs() < 0.02
+                                      ? FontWeight.bold
+                                      : FontWeight.w600,
+                                  color: (_speechRate - 0.40).abs() < 0.02
+                                      ? const Color(0xFF312E81)
+                                      : const Color(0xFF334155),
+                                ),
                               ),
                             ),
                           ),
@@ -742,22 +785,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   : const Color(0xFFF1F5F9),
                               side: BorderSide(
                                 color: (_speechRate - 0.50).abs() < 0.02
-                                    ? const Color(0xFF4F46E5)
-                                    : const Color(0xFFCBD5E1),
+                                  ? const Color(0xFF4F46E5)
+                                  : const Color(0xFFCBD5E1),
                                 width: (_speechRate - 0.50).abs() < 0.02 ? 2.0 : 1.5,
                               ),
                               minimumSize: const Size(0, 48),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                             ),
                             onPressed: () => _applySpeechRate(0.50),
-                            child: Text(
-                              'Normal (0.5)',
-                              style: TextStyle(
-                                fontWeight: (_speechRate - 0.50).abs() < 0.02
-                                    ? FontWeight.bold
-                                    : FontWeight.w600,
-                                color: (_speechRate - 0.50).abs() < 0.02
-                                    ? const Color(0xFF312E81)
-                                    : const Color(0xFF334155),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'Normal (0.5)',
+                                style: TextStyle(
+                                  fontWeight: (_speechRate - 0.50).abs() < 0.02
+                                      ? FontWeight.bold
+                                      : FontWeight.w600,
+                                  color: (_speechRate - 0.50).abs() < 0.02
+                                      ? const Color(0xFF312E81)
+                                      : const Color(0xFF334155),
+                                ),
                               ),
                             ),
                           ),
@@ -771,22 +818,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   : const Color(0xFFF1F5F9),
                               side: BorderSide(
                                 color: (_speechRate - 0.60).abs() < 0.02
-                                    ? const Color(0xFF4F46E5)
-                                    : const Color(0xFFCBD5E1),
+                                  ? const Color(0xFF4F46E5)
+                                  : const Color(0xFFCBD5E1),
                                 width: (_speechRate - 0.60).abs() < 0.02 ? 2.0 : 1.5,
                               ),
                               minimumSize: const Size(0, 48),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                             ),
                             onPressed: () => _applySpeechRate(0.60),
-                            child: Text(
-                              'Rápido (0.6)',
-                              style: TextStyle(
-                                fontWeight: (_speechRate - 0.60).abs() < 0.02
-                                    ? FontWeight.bold
-                                    : FontWeight.w600,
-                                color: (_speechRate - 0.60).abs() < 0.02
-                                    ? const Color(0xFF312E81)
-                                    : const Color(0xFF334155),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'Rápido (0.6)',
+                                style: TextStyle(
+                                  fontWeight: (_speechRate - 0.60).abs() < 0.02
+                                      ? FontWeight.bold
+                                      : FontWeight.w600,
+                                  color: (_speechRate - 0.60).abs() < 0.02
+                                      ? const Color(0xFF312E81)
+                                      : const Color(0xFF334155),
+                                ),
                               ),
                             ),
                           ),
@@ -801,6 +852,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
                         onPressed: () async {
                           HapticService.selection();
@@ -810,7 +862,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           );
                         },
                         icon: const Icon(Icons.volume_up_rounded),
-                        label: const Text('Probar locución de voz'),
+                        label: const Flexible(
+                          child: Text(
+                            'Probar locución de voz',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -862,9 +919,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _buildTextScaleOption('Pequeño (0.9x)', TextScaleService.scaleSmall),
                         _buildTextScaleOption('Normal (1.0x)', TextScaleService.scaleNormal),
                         _buildTextScaleOption('Grande (1.2x)', TextScaleService.scaleLarge),
-                        _buildTextScaleOption('Muy grande (1.3x)', TextScaleService.scaleExtraLarge),
+                        _buildTextScaleOption('Muy grande (1.45x)', TextScaleService.scaleExtraLarge),
                       ],
                     ),
+                    if (_textScale >= TextScaleService.scaleLarge) ...[
+                      const SizedBox(height: 14),
+                      Semantics(
+                        container: true,
+                        label: 'Aviso de accesibilidad: Modo de texto grande activo.',
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF60A5FA), width: 1.5),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.accessibility_new_rounded,
+                                color: Color(0xFF1D4ED8),
+                                size: 24,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Modo de texto ampliado activo (${TextScaleService.getScaleLabel(_textScale)}). La interfaz y los botones se adaptan dinámicamente para garantizar legibilidad completa sin cortes.',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF1E3A8A),
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     Semantics(
                       label: 'Muestra de vista previa del tamaño de texto configurado',
@@ -899,11 +994,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: ElevatedButton.icon(
                 onPressed: _confirmLogout,
                 icon: const Icon(Icons.logout_rounded),
-                label: const Text('Cerrar sesión'),
+                label: const Flexible(
+                  child: Text(
+                    'Cerrar sesión',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red.shade700,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
             ),
@@ -931,8 +1032,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 : const Color(0xFFCBD5E1),
             width: isSelected ? 2.0 : 1.5,
           ),
-          minimumSize: const Size(125, 48),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          minimumSize: const Size(110, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
@@ -940,6 +1041,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         onPressed: () => _applyTextScale(scale),
         child: Text(
           label,
+          textAlign: TextAlign.center,
+          softWrap: true,
           style: TextStyle(
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
             color: isSelected

@@ -2,12 +2,222 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
+import '../../services/encouragement_service.dart';
 import '../../services/haptic_service.dart';
 import '../../services/progress_service.dart';
 import '../../services/tts_service.dart';
-import '../../core/theme/app_theme.dart';
 import '../glossary/glossary_data.dart';
 import '../glossary/glossary_word.dart';
+import 'riddle_practice_screen.dart';
+import 'true_false_practice_screen.dart';
+
+class _A1FillBlankTemplate {
+  final String sentence;
+  final String hint;
+
+  const _A1FillBlankTemplate({required this.sentence, required this.hint});
+}
+
+/// Banco pedagógico de oraciones simplificadas a nivel MCER A1 (presente simple, estructuras directas y vocabulario cotidiano).
+const Map<String, _A1FillBlankTemplate> _a1FillBlankTemplates = {
+  'pen': _A1FillBlankTemplate(
+    sentence: 'I write in my notebook with a blue _____.',
+    hint: 'Escribo en mi cuaderno con un bolígrafo azul.',
+  ),
+  'board': _A1FillBlankTemplate(
+    sentence: 'The teacher writes new words on the _____.',
+    hint: 'El profesor escribe palabras nuevas en el tablero.',
+  ),
+  'bottle': _A1FillBlankTemplate(
+    sentence: 'I drink cold water from my _____.',
+    hint: 'Bebo agua fría de mi botella.',
+  ),
+  'apple': _A1FillBlankTemplate(
+    sentence: 'The sweet red fruit is an _____.',
+    hint: 'La fruta roja y dulce es una manzana.',
+  ),
+  'chair': _A1FillBlankTemplate(
+    sentence: 'Please sit down on the comfortable _____.',
+    hint: 'Por favor siéntate en la silla cómoda.',
+  ),
+  'book': _A1FillBlankTemplate(
+    sentence: 'I read an interesting _____ in English.',
+    hint: 'Leo un libro interesante en inglés.',
+  ),
+  'table': _A1FillBlankTemplate(
+    sentence: 'We eat lunch together at the kitchen _____.',
+    hint: 'Almorzamos juntos en la mesa de la cocina.',
+  ),
+  'door': _A1FillBlankTemplate(
+    sentence: 'Please close the front _____ when you enter.',
+    hint: 'Por favor cierra la puerta principal cuando entres.',
+  ),
+  'window': _A1FillBlankTemplate(
+    sentence: 'Open the big _____ to let the sun in.',
+    hint: 'Abre la ventana grande para que entre el sol.',
+  ),
+  'backpack': _A1FillBlankTemplate(
+    sentence: 'I carry my books and pencils in my _____.',
+    hint: 'Llevo mis libros y lápices en mi mochila.',
+  ),
+  'pencil': _A1FillBlankTemplate(
+    sentence: 'I draw a house with my yellow _____.',
+    hint: 'Dibujo una casa con mi lápiz amarillo.',
+  ),
+  'notebook': _A1FillBlankTemplate(
+    sentence: 'I write my class notes in my new _____.',
+    hint: 'Escribo mis notas de clase en mi nuevo cuaderno.',
+  ),
+  'eraser': _A1FillBlankTemplate(
+    sentence: 'I use an _____ when I make a mistake.',
+    hint: 'Uso un borrador cuando cometo un error.',
+  ),
+  'desk': _A1FillBlankTemplate(
+    sentence: 'My computer and books are on my study _____.',
+    hint: 'Mi computadora y mis libros están en mi escritorio de estudio.',
+  ),
+  'clock': _A1FillBlankTemplate(
+    sentence: 'The _____ on the wall shows the time.',
+    hint: 'El reloj en la pared muestra la hora.',
+  ),
+  'glasses': _A1FillBlankTemplate(
+    sentence: 'I wear my black _____ to read clearly.',
+    hint: 'Uso mis gafas negras para leer con claridad.',
+  ),
+  'computer': _A1FillBlankTemplate(
+    sentence: 'I study my English lessons on my _____.',
+    hint: 'Estudio mis lecciones de inglés en mi computadora.',
+  ),
+  'phone': _A1FillBlankTemplate(
+    sentence: 'I call my family every day with my _____.',
+    hint: 'Llamo a mi familia todos los días con mi teléfono.',
+  ),
+  'cup': _A1FillBlankTemplate(
+    sentence: 'I drink hot tea in a small _____.',
+    hint: 'Bebo té caliente en una taza pequeña.',
+  ),
+  'spoon': _A1FillBlankTemplate(
+    sentence: 'I eat hot vegetable soup with a _____.',
+    hint: 'Como sopa caliente de verduras con una cuchara.',
+  ),
+  'fork': _A1FillBlankTemplate(
+    sentence: 'I use a _____ to eat my fresh salad.',
+    hint: 'Uso un tenedor para comer mi ensalada fresca.',
+  ),
+  'plate': _A1FillBlankTemplate(
+    sentence: 'The warm food is served on a clean _____.',
+    hint: 'La comida tibia se sirve en un plato limpio.',
+  ),
+  'keys': _A1FillBlankTemplate(
+    sentence: 'I open the front door with my metal _____.',
+    hint: 'Abro la puerta principal con mis llaves de metal.',
+  ),
+  'key': _A1FillBlankTemplate(
+    sentence: 'I open the house door with this _____.',
+    hint: 'Abro la puerta de la casa con esta llave.',
+  ),
+  'shoes': _A1FillBlankTemplate(
+    sentence: 'I put on my black _____ to go for a walk.',
+    hint: 'Me pongo mis zapatos negros para salir a caminar.',
+  ),
+  'shoe': _A1FillBlankTemplate(
+    sentence: 'I put a comfortable _____ on my foot.',
+    hint: 'Me pongo un zapato cómodo en el pie.',
+  ),
+  'shirt': _A1FillBlankTemplate(
+    sentence: 'He wears a clean white _____ to school.',
+    hint: 'Él usa una camisa blanca limpia para ir a la escuela.',
+  ),
+  'pants': _A1FillBlankTemplate(
+    sentence: 'I wear blue _____ and a white shirt.',
+    hint: 'Uso pantalones azules y una camisa blanca.',
+  ),
+  'hat': _A1FillBlankTemplate(
+    sentence: 'I wear a warm _____ on my head in the sun.',
+    hint: 'Uso un sombrero protector en mi cabeza bajo el sol.',
+  ),
+  'watch': _A1FillBlankTemplate(
+    sentence: 'I look at my wrist _____ to see what time it is.',
+    hint: 'Miro mi reloj de pulsera para ver qué hora es.',
+  ),
+  'wallet': _A1FillBlankTemplate(
+    sentence: 'I keep my money inside my leather _____.',
+    hint: 'Guardo mi dinero dentro de mi billetera.',
+  ),
+  'umbrella': _A1FillBlankTemplate(
+    sentence: 'I take an _____ with me when it rains.',
+    hint: 'Llevo un paraguas conmigo cuando llueve.',
+  ),
+  'water': _A1FillBlankTemplate(
+    sentence: 'I drink a fresh glass of _____ every morning.',
+    hint: 'Bebo un vaso de agua fresca cada mañana.',
+  ),
+  'bread': _A1FillBlankTemplate(
+    sentence: 'We eat warm _____ with butter for breakfast.',
+    hint: 'Comemos pan caliente con mantequilla en el desayuno.',
+  ),
+  'milk': _A1FillBlankTemplate(
+    sentence: 'I drink a cold glass of _____ with cookies.',
+    hint: 'Bebo un vaso de leche fría con galletas.',
+  ),
+  'bed': _A1FillBlankTemplate(
+    sentence: 'I sleep in my comfortable _____ at night.',
+    hint: 'Duermo en mi cama cómoda por la noche.',
+  ),
+  'car': _A1FillBlankTemplate(
+    sentence: 'My father drives his red _____ to work.',
+    hint: 'Mi padre conduce su carro rojo al trabajo.',
+  ),
+  'bus': _A1FillBlankTemplate(
+    sentence: 'I take the yellow _____ to go to school.',
+    hint: 'Tomo el autobús amarillo para ir a la escuela.',
+  ),
+  'bicycle': _A1FillBlankTemplate(
+    sentence: 'I ride my new _____ in the green park.',
+    hint: 'Monto mi nueva bicicleta en el parque verde.',
+  ),
+  'dog': _A1FillBlankTemplate(
+    sentence: 'The friendly _____ runs and plays in the yard.',
+    hint: 'El perro amigable corre y juega en el patio.',
+  ),
+  'cat': _A1FillBlankTemplate(
+    sentence: 'The little _____ sleeps peacefully on the sofa.',
+    hint: 'El pequeño gato duerme plácidamente en el sofá.',
+  ),
+  'bird': _A1FillBlankTemplate(
+    sentence: 'The small _____ sings high in the tree.',
+    hint: 'El pequeño pájaro canta en lo alto del árbol.',
+  ),
+  'cow': _A1FillBlankTemplate(
+    sentence: 'The big _____ eats green grass on the farm.',
+    hint: 'La vaca grande come pasto verde en la granja.',
+  ),
+  'duck': _A1FillBlankTemplate(
+    sentence: 'The yellow _____ swims happily in the lake.',
+    hint: 'El pato amarillo nada alegremente en el lago.',
+  ),
+  'fish': _A1FillBlankTemplate(
+    sentence: 'The little blue _____ swims in the water.',
+    hint: 'El pequeño pez azul nada en el agua.',
+  ),
+  'horse': _A1FillBlankTemplate(
+    sentence: 'The brown _____ runs fast in the field.',
+    hint: 'El caballo marrón corre rápido en el campo.',
+  ),
+  'lion': _A1FillBlankTemplate(
+    sentence: 'The strong _____ is the king of the animals.',
+    hint: 'El león fuerte es el rey de los animales.',
+  ),
+  'rabbit': _A1FillBlankTemplate(
+    sentence: 'The white _____ loves to eat fresh carrots.',
+    hint: 'Al conejo blanco le encanta comer zanahorias frescas.',
+  ),
+  'turtle': _A1FillBlankTemplate(
+    sentence: 'The green _____ walks very slowly on the sand.',
+    hint: 'La tortuga verde camina muy despacio sobre la arena.',
+  ),
+};
 
 enum PracticeStep {
   modeSelection,
@@ -42,6 +252,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
 
   bool _answered = false;
   bool? _wasCorrect;
+  String _currentEncouragement = '¡Excelente trabajo! Well done!';
 
   int _currentQuestionIndex = 0;
   int _correctCount = 0;
@@ -50,6 +261,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
   String? _selectedWordId;
 
   late List<GlossaryWord> _practicePool;
+  List<GlossaryWord> _roundQuestions = [];
   late GlossaryWord _currentWord;
   late List<GlossaryWord> _options;
 
@@ -63,8 +275,26 @@ class _PracticeScreenState extends State<PracticeScreen> {
     ];
 
     if (widget.initialMode != null) {
-      _selectedMode = widget.initialMode;
-      _currentStep = PracticeStep.setup;
+      if (widget.initialMode == 'Verdadero o Falso') {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const TrueFalsePracticeScreen()),
+          );
+        });
+      } else if (widget.initialMode == 'Adivina por la descripción') {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const RiddlePracticeScreen()),
+          );
+        });
+      } else {
+        _selectedMode = widget.initialMode;
+        _currentStep = PracticeStep.setup;
+      }
     }
   }
 
@@ -76,6 +306,20 @@ class _PracticeScreenState extends State<PracticeScreen> {
 
   void _chooseMode(String mode) {
     HapticService.buttonPress();
+    if (mode == 'Verdadero o Falso') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const TrueFalsePracticeScreen()),
+      );
+      return;
+    }
+    if (mode == 'Adivina por la descripción') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const RiddlePracticeScreen()),
+      );
+      return;
+    }
     setState(() {
       _selectedMode = mode;
       _currentStep = PracticeStep.setup;
@@ -111,9 +355,12 @@ class _PracticeScreenState extends State<PracticeScreen> {
     }
 
     filteredWords.shuffle(_random);
+    final count = min(_selectedQuestionLimit, filteredWords.length);
 
     setState(() {
       _practicePool = filteredWords;
+      // Muestreo sin reemplazo: garantiza que ninguna palabra/frase se repita en la misma ronda
+      _roundQuestions = filteredWords.take(count).toList();
       _currentStep = PracticeStep.playing;
       _currentQuestionIndex = 0;
       _correctCount = 0;
@@ -123,16 +370,14 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 
   void _generateQuestion() {
-    final words = List<GlossaryWord>.from(_practicePool);
-    words.shuffle(_random);
-
-    _currentWord = words.first;
+    _currentWord = _roundQuestions[_currentQuestionIndex];
 
     final wrongCount = _selectedMode == 'Completar la frase' ? 2 : 3;
-    final wrongOptions = words
+    final candidates = _practicePool
         .where((word) => word.id != _currentWord.id)
-        .take(wrongCount)
         .toList();
+    candidates.shuffle(_random);
+    final wrongOptions = candidates.take(wrongCount).toList();
 
     _options = [_currentWord, ...wrongOptions];
     _options.shuffle(_random);
@@ -179,12 +424,25 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 
   String get _sentenceWithBlank {
+    final key = _currentWord.wordEn.trim().toLowerCase();
+    if (_a1FillBlankTemplates.containsKey(key)) {
+      return _a1FillBlankTemplates[key]!.sentence;
+    }
+
     final en = _currentWord.exampleEn;
     final pattern = RegExp(RegExp.escape(_currentWord.wordEn), caseSensitive: false);
     if (pattern.hasMatch(en)) {
       return en.replaceFirst(pattern, '_____');
     }
-    return 'The _____ is here.';
+    return 'The _____ is on the table.';
+  }
+
+  String get _sentenceHint {
+    final key = _currentWord.wordEn.trim().toLowerCase();
+    if (_a1FillBlankTemplates.containsKey(key)) {
+      return _a1FillBlankTemplates[key]!.hint;
+    }
+    return _currentWord.exampleEs;
   }
 
   Future<void> _selectAnswer(GlossaryWord selectedWord) async {
@@ -193,6 +451,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
     final isCorrect = selectedWord.id == _currentWord.id;
 
     if (isCorrect) {
+      _currentEncouragement = EncouragementService.getRandomEncouragement();
       await HapticService.success();
     } else {
       await HapticService.error();
@@ -214,9 +473,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
       isCorrect: isCorrect,
     );
 
-    // Refuerzo multimodal bilingüe accesible (RF-08)
+    // Refuerzo multimodal bilingüe accesible (RF-08) con frases alentadoras aleatorias
     if (isCorrect) {
-      await _ttsService.speakSpanish('¡Correcto! Well done.');
+      await _ttsService.speakSpanish(_currentEncouragement);
     } else {
       if (_selectedMode == 'Completar la frase') {
         await _ttsService.speakSpanish('Inténtalo de nuevo. La palabra correcta era ${_currentWord.wordEn}.');
@@ -229,7 +488,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
   void _nextQuestion() {
     HapticService.selection();
     final isLastQuestion =
-        _currentQuestionIndex + 1 >= _selectedQuestionLimit;
+        _currentQuestionIndex + 1 >= _roundQuestions.length;
 
     if (isLastQuestion) {
       setState(() {
@@ -250,21 +509,27 @@ class _PracticeScreenState extends State<PracticeScreen> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('¿Deseas salir de la práctica?'),
-        content: const Text('Se perderá el avance de esta sesión.'),
+        title: const Text('¿Deseas hacer una pausa?'),
+        content: const Text('Si sales ahora, no se guardará el avance de esta ronda. ¿Quieres seguir practicando?'),
         actions: [
           TextButton(
             style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Continuar practicando'),
+            onPressed: () {
+              HapticService.selection();
+              Navigator.pop(ctx, false);
+            },
+            child: const Text('Seguir aprendiendo'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Colors.red.shade700,
               minimumSize: const Size(48, 48),
             ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Salir'),
+            onPressed: () {
+              HapticService.buttonPress();
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('Pausar y salir'),
           ),
         ],
       ),
@@ -272,7 +537,14 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 
   Future<void> _showFinalResult() async {
-    _ttsService.speakSpanish('Práctica finalizada. Excelente esfuerzo.');
+    final int total = _roundQuestions.length;
+    await HapticService.success();
+    await _ttsService.playVictorySound();
+    await _ttsService.speakPracticeSummary(
+      totalPreguntas: total,
+      totalAciertos: _correctCount,
+      totalFallos: _incorrectCount,
+    );
 
     if (!mounted) return;
 
@@ -280,31 +552,34 @@ class _PracticeScreenState extends State<PracticeScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Práctica finalizada'),
+          title: const Text('¡Gran esfuerzo! Práctica completada'),
           content: Text(
+            '¡Felicitaciones por practicar!\n\n'
             'Respuestas correctas: $_correctCount\n'
-            'Respuestas incorrectas: $_incorrectCount\n'
-            'Total: $_selectedQuestionLimit preguntas',
+            'Preguntas para repasar: $_incorrectCount\n'
+            'Total completado: ${_roundQuestions.length} preguntas',
           ),
           actions: [
             TextButton(
               onPressed: () {
+                HapticService.selection();
                 Navigator.pop(context);
                 setState(() {
                   _currentStep = PracticeStep.modeSelection;
                   _selectedMode = null;
                 });
               },
-              child: const Text('Cerrar'),
+              child: const Text('Volver al menú'),
             ),
             FilledButton(
               onPressed: () {
+                HapticService.buttonPress();
                 Navigator.pop(context);
                 setState(() {
                   _currentStep = PracticeStep.setup;
                 });
               },
-              child: const Text('Nueva práctica'),
+              child: const Text('¡Practicar de nuevo!'),
             ),
           ],
         );
@@ -348,13 +623,13 @@ class _PracticeScreenState extends State<PracticeScreen> {
     }
 
     if (_wasCorrect == true) {
-      return '¡Correcto! Well done.';
+      return _currentEncouragement;
     }
 
     if (_selectedMode == 'Completar la frase') {
-      return 'Inténtalo de nuevo. La respuesta correcta era ${_currentWord.wordEn}.';
+      return '¡Casi! Ánimo, la respuesta correcta era "${_currentWord.wordEn}". ¡Sigamos practicando!';
     }
-    return 'Inténtalo de nuevo. ${_currentWord.wordEn} significa ${_currentWord.wordEs}.';
+    return '¡Buen intento! "${_currentWord.wordEn}" significa "${_currentWord.wordEs}". ¡Sigamos adelante!';
   }
 
   @override
@@ -388,170 +663,186 @@ class _PracticeScreenState extends State<PracticeScreen> {
         title: const Text('Prácticas guiadas'),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Modalidades de práctica',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: AppTheme.textPrimary,
-                ),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          children: [
+            const Text(
+              'Modalidades de práctica',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: AppTheme.textPrimary,
               ),
-              const SizedBox(height: 4),
-              const Text(
-                'Elige cómo deseas entrenar tu oído y consolidar tu vocabulario en inglés A1.',
-                style: TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 14,
-                  height: 1.3,
-                ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Elige cómo deseas entrenar tu oído y consolidar tu vocabulario en inglés A1.',
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 14,
+                height: 1.35,
               ),
-              const SizedBox(height: 16),
+            ),
+            const SizedBox(height: 20),
 
-              // Modalidad 1: Asociación auditiva (50% de la pantalla)
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  label:
-                      'Asociación auditiva. Escucha con atención la palabra en inglés y selecciona el significado correcto. Toca dos veces para configurar esta práctica.',
-                  child: Card(
-                    color: AppTheme.surface,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      side: BorderSide(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.35),
-                        width: 1.5,
-                      ),
+            // Modalidad 1: Asociación auditiva
+            _buildModeCard(
+              title: 'Asociación auditiva',
+              description: 'Escucha con atención la palabra en inglés y selecciona el significado correcto.',
+              icon: Icons.hearing_rounded,
+              accentColor: const Color(0xFF10B981),
+              semanticHint: 'Toca dos veces para configurar esta práctica.',
+              onTap: () => _chooseMode('Asociación auditiva'),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Modalidad 2: Completar la frase
+            _buildModeCard(
+              title: 'Completar la frase',
+              description: 'Escucha la oración contextual A1 y elige la palabra en inglés que falta.',
+              icon: Icons.edit_note_rounded,
+              accentColor: const Color(0xFF6366F1),
+              semanticHint: 'Toca dos veces para configurar esta práctica.',
+              onTap: () => _chooseMode('Completar la frase'),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Modalidad 3: Verdadero o Falso
+            _buildModeCard(
+              title: 'Verdadero o Falso',
+              description: 'Evalúa la asociación bilingüe entre el término en inglés y su significado.',
+              icon: Icons.check_circle_outline_rounded,
+              accentColor: const Color(0xFFD97706),
+              semanticHint: 'Toca dos veces para iniciar este desafío.',
+              onTap: () => _chooseMode('Verdadero o Falso'),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Modalidad 4: Adivina por la descripción
+            _buildModeCard(
+              title: 'Adivina por la descripción',
+              description: 'Escucha pistas funcionales en español y adivina el objeto en inglés.',
+              icon: Icons.lightbulb_rounded,
+              accentColor: const Color(0xFF8B5CF6),
+              semanticHint: 'Toca dos veces para iniciar este desafío.',
+              onTap: () => _chooseMode('Adivina por la descripción'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeCard({
+    required String title,
+    required String description,
+    required IconData icon,
+    required Color accentColor,
+    required String semanticHint,
+    required VoidCallback onTap,
+    String? badge,
+  }) {
+    return Semantics(
+      button: true,
+      label: '$title. $description. $semanticHint',
+      child: Card(
+        color: AppTheme.surface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(
+            color: accentColor.withValues(alpha: 0.35),
+            width: 1.5,
+          ),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: () {
+            HapticService.buttonPress();
+            onTap();
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: accentColor.withValues(alpha: 0.4),
+                      width: 2,
                     ),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(24),
-                      onTap: () => _chooseMode('Asociación auditiva'),
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 72,
-                              height: 72,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.18),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: const Color(0xFF10B981).withValues(alpha: 0.4),
-                                  width: 2,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.hearing_rounded,
-                                color: Color(0xFF10B981),
-                                size: 38,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Asociación auditiva',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 22,
+                  ),
+                  child: Icon(
+                    icon,
+                    color: accentColor,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: const TextStyle(
+                                fontSize: 18,
                                 fontWeight: FontWeight.w900,
                                 color: AppTheme.textPrimary,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Escucha con atención la palabra en inglés y selecciona el significado correcto.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: AppTheme.textSecondary,
-                                height: 1.35,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Modalidad 2: Completar la frase (50% de la pantalla)
-              Expanded(
-                child: Semantics(
-                  button: true,
-                  label:
-                      'Completar la frase. Escucha la oración y elige la palabra que falta. Toca dos veces para configurar esta práctica.',
-                  child: Card(
-                    color: AppTheme.surface,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      side: BorderSide(
-                        color: const Color(0xFF6366F1).withValues(alpha: 0.35),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(24),
-                      onTap: () => _chooseMode('Completar la frase'),
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
+                          ),
+                          if (badge != null)
                             Container(
-                              width: 72,
-                              height: 72,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF6366F1).withValues(alpha: 0.18),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: const Color(0xFF6366F1).withValues(alpha: 0.4),
-                                  width: 2,
+                                color: accentColor,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                badge,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
                                 ),
                               ),
-                              child: const Icon(
-                                Icons.edit_note_rounded,
-                                color: Color(0xFF6366F1),
-                                size: 40,
-                              ),
                             ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Completar la frase',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Escucha la oración contextual y elige la palabra en inglés que falta.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: AppTheme.textSecondary,
-                                height: 1.35,
-                              ),
-                            ),
-                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        description,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppTheme.textSecondary,
+                          height: 1.35,
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 18,
+                  color: accentColor,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -666,12 +957,16 @@ class _PracticeScreenState extends State<PracticeScreen> {
                       child: FilledButton.icon(
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(52),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
                         onPressed: _startPractice,
                         icon: const Icon(Icons.play_arrow_rounded),
-                        label: const Text(
-                          'Iniciar práctica',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                        label: const Flexible(
+                          child: Text(
+                            'Iniciar práctica',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                          ),
                         ),
                       ),
                     ),
@@ -679,10 +974,16 @@ class _PracticeScreenState extends State<PracticeScreen> {
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(48),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
                       onPressed: _backToModeSelection,
                       icon: const Icon(Icons.swap_horiz_rounded),
-                      label: const Text('Elegir otra modalidad'),
+                      label: const Flexible(
+                        child: Text(
+                          'Elegir otra modalidad',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -713,7 +1014,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Pregunta $currentNumber de $_selectedQuestionLimit',
+                      'Pregunta $currentNumber de ${_roundQuestions.length}',
                       style: const TextStyle(
                         color: AppTheme.textSecondary,
                         fontWeight: FontWeight.w700,
@@ -767,13 +1068,47 @@ class _PracticeScreenState extends State<PracticeScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Pista en español: "${_currentWord.exampleEs}"',
-                        style: const TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontStyle: FontStyle.italic,
-                          fontSize: 14,
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceLight,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppTheme.borderSubtle, width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Pista en español: "$_sentenceHint"',
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Semantics(
+                              button: true,
+                              label: 'Escuchar pista en español: $_sentenceHint',
+                              hint: 'Toca dos veces para escuchar la pista en español en voz alta',
+                              child: IconButton.filledTonal(
+                                style: IconButton.styleFrom(
+                                  backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
+                                  foregroundColor: AppTheme.primary,
+                                  minimumSize: const Size(48, 48),
+                                ),
+                                icon: const Icon(Icons.volume_up_rounded, size: 24),
+                                tooltip: 'Escuchar pista en español',
+                                onPressed: () async {
+                                  await HapticService.buttonPress();
+                                  await _ttsService.speakSpanish('Pista: $_sentenceHint');
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 18),
@@ -787,11 +1122,15 @@ class _PracticeScreenState extends State<PracticeScreen> {
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
                         onPressed: _playQuestionAudio,
                         icon: const Icon(Icons.volume_up_rounded),
-                        label: Text(
-                          isFillBlank ? 'Escuchar oración' : 'Escuchar palabra',
+                        label: Flexible(
+                          child: Text(
+                            isFillBlank ? 'Escuchar oración' : 'Escuchar palabra',
+                            textAlign: TextAlign.center,
+                          ),
                         ),
                       ),
                     ),
@@ -806,10 +1145,16 @@ class _PracticeScreenState extends State<PracticeScreen> {
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
                         onPressed: _playQuestionAudioSlow,
                         icon: const Icon(Icons.slow_motion_video_rounded),
-                        label: const Text('Escuchar lento'),
+                        label: const Flexible(
+                          child: Text(
+                            'Escuchar lento',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -891,12 +1236,16 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(50),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
                   onPressed: _nextQuestion,
                   icon: const Icon(Icons.arrow_forward_rounded),
-                  label: const Text(
-                    'Siguiente pregunta',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                  label: const Flexible(
+                    child: Text(
+                      'Siguiente pregunta',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                    ),
                   ),
                 ),
               ),

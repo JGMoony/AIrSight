@@ -1,3 +1,4 @@
+﻿import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,9 +38,11 @@ class TtsService {
 
   double _userSpeechRate = defaultSpeechRate;
   bool _soundsEnabled = true;
+  bool _isWelcomePlaying = false;
 
   double get currentSpeechRate => _userSpeechRate;
   bool get soundsEnabled => _soundsEnabled;
+  bool get isWelcomePlaying => _isWelcomePlaying;
 
   TtsService._internal() {
     _ensureConfigured();
@@ -379,7 +382,136 @@ class TtsService {
     }
   }
 
-  Future<void> stop() async {
+  /// Locución estándar completa y pedagógica para las respuestas del tutor de voz:
+  /// 1. Palabra en inglés y significado en español.
+  /// 2. Pronunciación fonética.
+  /// 3. Frase de ejemplo en inglés: "Frase de ejemplo: [exampleEn]." (leída pausada en inglés).
+  /// 4. Traducción del ejemplo en español: "[exampleEs]" (leída en español).
+  Future<void> speakTutorStandardResponse({
+    required String wordEn,
+    required String wordEs,
+    String? phonetic,
+    String? explanationEs,
+    String? exampleEn,
+    String? exampleEs,
+    Duration pause = const Duration(milliseconds: 350),
+    double? exampleRate,
+  }) async {
+    final session = ++_currentSpeechSession;
+    if (_isTest) return;
+    await _ensureConfigured();
+    await _flutterTts.stop();
+
+    if (session != _currentSpeechSession) return;
+
+    final rate = exampleRate ?? (_userSpeechRate * 0.90).clamp(0.35, 0.65);
+
+    try {
+      // 1. Explicación y significado en ESPAÑOL
+      final String significado;
+      if (explanationEs != null && explanationEs.trim().isNotEmpty) {
+        significado = explanationEs.trim().endsWith('.')
+            ? '$explanationEs Se pronuncia:'
+            : '$explanationEs. Se pronuncia:';
+      } else {
+        significado = '$wordEn significa $wordEs. Se pronuncia:';
+      }
+      await _flutterTts.setLanguage('es-ES');
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.setSpeechRate(_userSpeechRate);
+      await _flutterTts.speak(significado);
+
+      if (session != _currentSpeechSession) return;
+      await Future.delayed(const Duration(milliseconds: 350));
+      if (session != _currentSpeechSession) return;
+
+      // 2. Pausa breve y pronunciación de la palabra en INGLÉS (estrictamente wordEn)
+      await _flutterTts.setLanguage('en-US');
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.setSpeechRate(0.35); // Pronunciación pausada A1
+      await _flutterTts.speak(wordEn.trim());
+
+      if (session != _currentSpeechSession) return;
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (session != _currentSpeechSession) return;
+
+      // 3. Frase de ejemplo en INGLÉS
+      if (exampleEn != null && exampleEn.trim().isNotEmpty) {
+        await _flutterTts.setLanguage('en-US');
+        await _flutterTts.setPitch(1.0);
+        await _flutterTts.setSpeechRate(rate);
+        await _flutterTts.speak(exampleEn.trim());
+
+        if (session != _currentSpeechSession) return;
+        await Future.delayed(const Duration(milliseconds: 350));
+        if (session != _currentSpeechSession) return;
+      }
+
+      // 4. Traducción del ejemplo en ESPAÑOL
+      if (exampleEs != null && exampleEs.trim().isNotEmpty) {
+        await _flutterTts.setLanguage('es-ES');
+        await _flutterTts.setPitch(1.0);
+        await _flutterTts.setSpeechRate(0.45);
+        await _flutterTts.speak('Ejemplo: ${exampleEs.trim()}');
+      }
+    } finally {
+      if (session == _currentSpeechSession) {
+        await _flutterTts.setSpeechRate(_userSpeechRate);
+      }
+    }
+  }
+
+  /// Reproduce un efecto sonoro accesible de victoria al finalizar una sesión de práctica (WCAG 2.2 AA).
+  /// Emite un tono limpio y nítido del sistema respetando la preferencia de efectos sonoros del estudiante.
+  Future<void> playVictorySound() async {
+    if (!_soundsEnabled || _isTest) return;
+    try {
+      await SystemSound.play(SystemSoundType.alert);
+    } catch (_) {}
+  }
+
+  /// Locución accesible de balance final para cualquier práctica gamificada (WCAG 2.2 AA).
+  /// Verbaliza el total de preguntas, respuestas correctas, incorrectas, porcentaje de precisión
+  /// y añade un refuerzo pedagógico adaptativo precedido del sonido de victoria.
+  Future<void> speakPracticeSummary({
+    required int totalPreguntas,
+    required int totalAciertos,
+    required int totalFallos,
+  }) async {
+    await playVictorySound();
+    final int porcentajePrecision = totalPreguntas > 0
+        ? ((totalAciertos / totalPreguntas) * 100).round()
+        : 0;
+    final String refuerzo = porcentajePrecision >= 80
+        ? ' ¡Excelente trabajo!'
+        : ' Sigue practicando para mejorar tu racha.';
+    final String resumenVoz =
+        '¡Práctica finalizada! Completaste $totalPreguntas preguntas. Obtuviste $totalAciertos respuestas correctas y $totalFallos incorrectas. Precisión del $porcentajePrecision por ciento.$refuerzo';
+    await speakSpanish(resumenVoz);
+  }
+
+  /// Alias de conveniencia para sintetizar en español
+  Future<void> speak(String text) async => speakSpanish(text);
+
+  /// Emite un mensaje prioritario de bienvenida que no es cancelable por toques involuntarios iniciales
+  Future<void> speakWelcome(String text) async {
+    _isWelcomePlaying = true;
+    try {
+      await speakSpanish(text);
+    } finally {
+      _isWelcomePlaying = false;
+    }
+  }
+
+  /// Detiene inmediatamente cualquier locución en curso e invalida sesiones activas.
+  /// Protege el mensaje de bienvenida a menos que force == true.
+  Future<void> stopAll({bool force = false}) async => stop(force: force);
+
+  Future<void> stop({bool force = false}) async {
+    if (_isWelcomePlaying && !force) {
+      debugPrint('[TtsService] Detención ignorada: locución de bienvenida en reproducción');
+      return;
+    }
     _currentSpeechSession++;
     debugPrint('[TtsService] stop solicitado');
     if (_isTest) return;

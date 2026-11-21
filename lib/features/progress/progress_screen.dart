@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/haptic_service.dart';
 import '../../services/progress_service.dart';
 import '../../services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -96,6 +97,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                         ),
                       ),
                       onPressed: () {
+                        HapticService.buttonPress();
                         _ttsService.speakSpanish(
                           'Tu progreso actual es: ${summary.wordsViewed} palabras exploradas, ${summary.audioPlays} audios nativos reproducidos, ${summary.correctAnswers} aciertos en prácticas y ${summary.tutorQueries} consultas realizadas al tutor de voz.',
                         );
@@ -128,7 +130,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
                     physics: const NeverScrollableScrollPhysics(),
-                    childAspectRatio: 1.25,
+                    childAspectRatio: MediaQuery.textScalerOf(context).scale(1.0) >= 1.4
+                        ? 0.90
+                        : (MediaQuery.textScalerOf(context).scale(1.0) >= 1.2 ? 1.05 : 1.25),
                     children: [
                       _StatCard(
                         label: 'Palabras vistas',
@@ -300,19 +304,31 @@ class _StatCard extends StatelessWidget {
               Icon(
                 icon,
                 color: AppTheme.primary,
-                size: 30,
+                size: 28,
               ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
+              const SizedBox(height: 6),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
               ),
+              const SizedBox(height: 4),
               Text(
                 label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: AppTheme.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -350,7 +366,10 @@ class _ErrorState extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: onRetry,
+              onPressed: () {
+                HapticService.selection();
+                onRetry();
+              },
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Intentar de nuevo'),
             ),

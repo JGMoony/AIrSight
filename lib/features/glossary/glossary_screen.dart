@@ -9,6 +9,7 @@ import '../../services/voice_search_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/local_user_storage.dart';
 import '../../services/firestore_service.dart';
+import '../admin/admin_word_form_screen.dart';
 import 'glossary_detail_screen.dart';
 import 'glossary_repository.dart';
 import 'glossary_word.dart';
@@ -349,7 +350,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                   subtitle: const Text('Crear un nuevo término con traducción y ejemplo'),
                   onTap: () {
                     Navigator.pop(ctx);
-                    _showAddWordDialog();
+                    _navigateToAddWord();
                   },
                 ),
                 ListTile(
@@ -375,108 +376,30 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
     );
   }
 
-  Future<void> _showAddWordDialog() async {
-    final wordEnController = TextEditingController();
-    final wordEsController = TextEditingController();
-    final categoryController = TextEditingController(text: 'Classroom');
-    final exampleController = TextEditingController();
-    final exampleEsController = TextEditingController();
-    final aliasesController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    await showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Agregar palabra A1'),
-          content: SingleChildScrollView(
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: wordEnController,
-                    decoration: const InputDecoration(labelText: 'Palabra en inglés (ej. desk)'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: wordEsController,
-                    decoration: const InputDecoration(labelText: 'Traducción en español (ej. escritorio)'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: categoryController,
-                    decoration: const InputDecoration(labelText: 'Categoría (ej. Classroom, Home, Food)'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: exampleController,
-                    decoration: const InputDecoration(labelText: 'Ejemplo en inglés (ej. The desk is clean.)'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: exampleEsController,
-                    decoration: const InputDecoration(labelText: 'Ejemplo en español (ej. El escritorio está limpio.)'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: aliasesController,
-                    decoration: const InputDecoration(
-                      labelText: 'Aliases IA separados por coma',
-                      hintText: 'desk, table, furniture',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                if (!formKey.currentState!.validate()) return;
-
-                final aliases = aliasesController.text
-                    .split(',')
-                    .map((e) => e.trim().toLowerCase())
-                    .where((e) => e.isNotEmpty)
-                    .toList();
-
-                final newWord = GlossaryWord(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  wordEn: wordEnController.text.trim().toLowerCase(),
-                  wordEs: wordEsController.text.trim().toLowerCase(),
-                  category: categoryController.text.trim(),
-                  exampleEn: exampleController.text.trim(),
-                  exampleEs: exampleEsController.text.trim(),
-                  aliases: aliases.isEmpty ? [wordEnController.text.trim().toLowerCase()] : aliases,
-                );
-
-                Navigator.pop(ctx);
-                await GlossaryRepository.addWord(newWord);
-                await _loadWords();
-
-                _announce('Palabra agregada exitosamente.');
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Palabra "${newWord.wordEn}" guardada.')),
-                );
-              },
-              child: const Text('Guardar palabra'),
-            ),
-          ],
-        );
-      },
+  Future<void> _navigateToAddWord() async {
+    HapticService.selection();
+    final added = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const AdminWordFormScreen(),
+      ),
     );
+    if (added == true) {
+      await _loadWords();
+    }
+  }
+
+  Future<void> _editWord(GlossaryWord word) async {
+    HapticService.selection();
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminWordFormScreen(wordToEdit: word),
+      ),
+    );
+    if (updated == true) {
+      await _loadWords();
+    }
   }
 
   @override
@@ -581,11 +504,13 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _categories.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
-                  childAspectRatio: 0.92,
+                  childAspectRatio: MediaQuery.textScalerOf(context).scale(1.0) >= 1.4
+                      ? 0.72
+                      : (MediaQuery.textScalerOf(context).scale(1.0) >= 1.2 ? 0.80 : 0.92),
                 ),
                 itemBuilder: (context, index) {
                   final category = _categories[index];
@@ -653,6 +578,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                     categoryColor: _colorForCategory(word.category),
                     onTap: () => _openDetail(word),
                     onPlay: () => _playWord(word),
+                    onEdit: _isAdmin ? () => _editWord(word) : null,
                   ),
                 ),
               ),
@@ -865,22 +791,29 @@ class _CategoryCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              Text(
-                category,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                  color: AppTheme.textPrimary,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    category,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                '$count palabras',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '$count palabras',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
               ),
             ],
@@ -896,12 +829,14 @@ class _WordCard extends StatelessWidget {
   final Color categoryColor;
   final VoidCallback onTap;
   final VoidCallback onPlay;
+  final VoidCallback? onEdit;
 
   const _WordCard({
     required this.word,
     required this.categoryColor,
     required this.onTap,
     required this.onPlay,
+    this.onEdit,
   });
 
   @override
@@ -1001,7 +936,24 @@ class _WordCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
+                if (onEdit != null) ...[
+                  Semantics(
+                    label: 'Editar palabra ${word.wordEn}, botón',
+                    button: true,
+                    child: IconButton.filledTonal(
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.orange.withValues(alpha: 0.15),
+                        foregroundColor: Colors.orange.shade800,
+                        minimumSize: const Size(48, 48),
+                      ),
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_rounded),
+                      tooltip: 'Editar palabra',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Semantics(
                   label: 'Escuchar pronunciación de ${word.wordEn}',
                   button: true,

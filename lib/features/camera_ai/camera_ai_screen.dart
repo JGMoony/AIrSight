@@ -123,9 +123,13 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
       return;
     }
 
+    // Detener cualquier audio previo del TTS para evitar solapamiento
+    await _ttsService.stop();
+
     // 3. Retroalimentación Inmediata (< 400ms) (RNF-01 / Sec 3.2.3)
     await HapticService.buttonPress();
     _announce('Capturando y analizando imagen, por favor espera...');
+    _ttsService.speakSpanish('Identificando objeto con la cámara, por favor espera un momento...');
 
     setState(() {
       _isAnalyzing = true;
@@ -165,10 +169,15 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
         _detectionError = null;
       });
       _announce('Capturando y analizando imagen, por favor espera...');
+      _ttsService.speakSpanish('Identificando objeto con la cámara, por favor espera un momento...');
     }
 
-    final result = await GeminiService.instance.identificarObjetoA1(bytes);
+    final rawResult = await GeminiService.instance.identificarObjetoA1(bytes);
     if (!mounted) return;
+
+    final result = rawResult['exito'] == true
+        ? GeminiService.validarResultadoVisionA1(rawResult)
+        : rawResult;
 
     setState(() {
       _isAnalyzing = false;
@@ -213,10 +222,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
       } else if (esConexion) {
         errorMsg = 'Se requiere conexión a internet para utilizar este servicio';
       } else {
-        final rawMsg = result['mensaje'] as String? ?? '';
-        errorMsg = rawMsg.isNotEmpty
-            ? rawMsg
-            : 'Objeto no reconocido o no disponible en el glosario A1';
+        errorMsg = GeminiService.mensajeObjetoNoReconocido;
       }
 
       setState(() {
@@ -523,14 +529,14 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                                       children: [
                                         Icon(
                                           Icons.check_circle_rounded,
-                                          color: AppTheme.secondary,
+                                          color: AppTheme.success,
                                           size: 16,
                                         ),
                                         SizedBox(width: 6),
                                         Text(
                                           'Objeto A1 Detectado',
                                           style: TextStyle(
-                                            color: Color(0xFF059669),
+                                            color: AppTheme.success,
                                             fontSize: 12,
                                             fontWeight: FontWeight.w800,
                                           ),
@@ -585,7 +591,7 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                                           style: const TextStyle(
                                             fontSize: 20,
                                             fontWeight: FontWeight.w700,
-                                            color: Color(0xFF059669),
+                                            color: AppTheme.success,
                                           ),
                                         ),
                                       ],
@@ -747,32 +753,35 @@ class _CameraAiScreenState extends State<CameraAiScreen> {
                               mainAxisAlignment:
                                   MainAxisAlignment.spaceBetween,
                               children: [
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.warning
-                                            .withValues(alpha: 0.15),
-                                        shape: BoxShape.circle,
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.warning
+                                              .withValues(alpha: 0.15),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.info_outline_rounded,
+                                          color: AppTheme.warning,
+                                          size: 22,
+                                        ),
                                       ),
-                                      child: const Icon(
-                                        Icons.info_outline_rounded,
-                                        color: AppTheme.warning,
-                                        size: 22,
+                                      const SizedBox(width: 10),
+                                      const Expanded(
+                                        child: Text(
+                                          'Aviso de Detección',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppTheme.textPrimary,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    const Text(
-                                      'Aviso de Detección',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w800,
-                                        color: AppTheme.textPrimary,
-                                      ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.close_rounded,

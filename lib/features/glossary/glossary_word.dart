@@ -63,9 +63,10 @@ class GlossaryWord {
     return false;
   }
 
-  /// Evalúa si una etiqueta detectada por el modelo de IA (COCO / YOLO) coincide con este término.
+  /// Evalúa si una etiqueta detectada por el modelo de IA (COCO / YOLO / Gemini) coincide con este término.
   bool matchesAiLabel(String label) {
     final cleanLabel = normalize(label);
+    if (cleanLabel.isEmpty) return false;
     if (normalize(wordEn) == cleanLabel) return true;
     if (normalize(wordEs) == cleanLabel) return true;
     if (aliases.any((alias) => normalize(alias) == cleanLabel)) return true;

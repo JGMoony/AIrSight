@@ -10,7 +10,7 @@ class TextScaleService {
   static const double scaleSmall = 0.9;
   static const double scaleNormal = 1.0;
   static const double scaleLarge = 1.2;
-  static const double scaleExtraLarge = 1.3;
+  static const double scaleExtraLarge = 1.45;
 
   static const List<double> availableScales = [
     scaleSmall,
@@ -58,7 +58,7 @@ class TextScaleService {
     if ((scale - scaleSmall).abs() < 0.05) return 'Pequeño (0.9x)';
     if ((scale - scaleNormal).abs() < 0.05) return 'Normal (1.0x)';
     if ((scale - scaleLarge).abs() < 0.05) return 'Grande (1.2x)';
-    if ((scale - scaleExtraLarge).abs() < 0.05) return 'Muy grande (1.3x)';
+    if ((scale - scaleExtraLarge).abs() < 0.05) return 'Muy grande (1.45x)';
     return '${scale}x';
   }
 }

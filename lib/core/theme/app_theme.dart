@@ -5,25 +5,26 @@ import 'package:flutter/material.dart';
 /// acento Índigo profundo de alto contraste (#4338CA) con ratio > 7:1 contra fondo blanco,
 /// y tipografías en Dark Slate (#0F172A) y Slate (#475569) con ratio >= 4.5:1.
 class AppTheme {
-  // Paleta Modo Claro Moderno de Alto Contraste
+  // Paleta Modo Claro Moderno de Alto Contraste (WCAG 2.2 AA)
   static const Color background = Color(0xFFF8FAFC); // Slate 50 ultra limpio
   static const Color surface = Color(0xFFFFFFFF); // Blanco puro
   static const Color surfaceLight = Color(0xFFF1F5F9); // Slate 100
   static const Color primary = Color(0xFF4338CA); // Deep Indigo (> 7:1 de contraste)
-  static const Color primaryLight = Color(0xFF6366F1); // Indigo vibrante
-  static const Color primaryHover = Color(0xFF3730A3); // Deep Indigo hover
-  static const Color secondary = Color(0xFF0D9488); // Teal 600
-  static const Color success = Color(0xFF059669); // Emerald 600
-  static const Color warning = Color(0xFFD97706); // Amber 600
-  static const Color error = Color(0xFFDC2626); // Red 600
+  static const Color primaryLight = Color(0xFF4F46E5); // Indigo 600 (> 4.5:1 contra blanco)
+  static const Color primaryHover = Color(0xFF3730A3); // Deep Indigo hover (> 9:1)
+  static const Color secondary = Color(0xFF0F766E); // Teal 700 (> 5.3:1 contra blanco)
+  static const Color success = Color(0xFF047857); // Emerald 700 (> 5.1:1 contra blanco)
+  static const Color warning = Color(0xFFB45309); // Amber 700 (> 4.9:1 contra blanco, ratio WCAG AA)
+  static const Color error = Color(0xFFB91C1C); // Red 700 (> 6.8:1 contra blanco)
 
   // Tipografía de alto contraste WCAG 2.2 AA
   static const Color textPrimary = Color(0xFF0F172A); // Dark Slate (ratio > 12:1)
-  static const Color textSecondary = Color(0xFF475569); // Slate 600 (ratio > 4.5:1)
-  static const Color textMuted = Color(0xFF64748B); // Slate 500
+  static const Color textSecondary = Color(0xFF334155); // Slate 700 (ratio > 7:1)
+  static const Color textMuted = Color(0xFF475569); // Slate 600 (ratio > 4.5:1 en cualquier superficie clara)
 
-  // Bordes sutiles y divisores
-  static const Color borderSubtle = Color(0xFFE2E8F0); // Slate 200
+  // Bordes sutiles y delimitadores de componentes interactivos (WCAG 2.2 AA 1.4.11 >= 3:1)
+  static const Color borderSubtle = Color(0xFFCBD5E1); // Slate 300
+  static const Color borderMedium = Color(0xFF94A3B8); // Slate 400 (ratio >= 3:1 contra fondo blanco)
 
   static ThemeData lightTheme() => modernLightTheme();
 
@@ -82,8 +83,11 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
           foregroundColor: Colors.white,
+          disabledBackgroundColor: const Color(0xFFE2E8F0),
+          disabledForegroundColor: const Color(0xFF475569),
           elevation: 1,
           minimumSize: const Size(double.infinity, 54),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -98,7 +102,8 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: primary,
           minimumSize: const Size(double.infinity, 52),
-          side: const BorderSide(color: borderSubtle, width: 1.5),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          side: const BorderSide(color: borderMedium, width: 1.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -114,6 +119,7 @@ class AppTheme {
           foregroundColor: primary,
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
           minimumSize: const Size(48, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -124,11 +130,11 @@ class AppTheme {
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: borderSubtle),
+          borderSide: const BorderSide(color: borderMedium),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: borderSubtle),
+          borderSide: const BorderSide(color: borderMedium),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),

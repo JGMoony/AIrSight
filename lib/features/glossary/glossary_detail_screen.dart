@@ -7,6 +7,7 @@ import '../../services/haptic_service.dart';
 import '../../services/progress_service.dart';
 import '../../services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../admin/admin_word_form_screen.dart';
 import 'glossary_repository.dart';
 import 'glossary_word.dart';
 
@@ -171,12 +172,30 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
       appBar: AppBar(
         title: Text(word.wordEn),
         actions: [
-          if (_isAdmin)
+          if (_isAdmin) ...[
+            IconButton(
+              icon: const Icon(Icons.edit_rounded, color: AppTheme.primaryLight),
+              tooltip: 'Editar palabra',
+              onPressed: () async {
+                HapticService.selection();
+                final updated = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AdminWordFormScreen(wordToEdit: widget.word),
+                  ),
+                );
+                if (updated == true) {
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                }
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
               tooltip: 'Eliminar palabra',
               onPressed: _confirmDelete,
             ),
+          ],
         ],
       ),
       body: SafeArea(
@@ -335,9 +354,14 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
               child: OutlinedButton.icon(
                 onPressed: _speakSpanishWord,
                 icon: const Icon(Icons.translate_rounded),
-                label: Text('Español: "${word.wordEs}"'),
+                label: Flexible(
+                  child: Text(
+                    'Español: "${word.wordEs}"',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
             ),
@@ -351,11 +375,16 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
               child: FilledButton.icon(
                 onPressed: _speakExample,
                 icon: const Icon(Icons.record_voice_over_rounded),
-                label: const Text('Escuchar ejemplo bilingüe'),
+                label: const Flexible(
+                  child: Text(
+                    'Escuchar ejemplo bilingüe',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
                 style: FilledButton.styleFrom(
                   backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
             ),

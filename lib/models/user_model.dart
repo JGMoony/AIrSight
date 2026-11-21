@@ -14,6 +14,9 @@ class UserModel {
   /// Alias de compatibilidad hacia [uid].
   String get id => uid;
 
+  /// Alias de compatibilidad hacia [nombre].
+  String get name => nombre;
+
   const UserModel({
     String? id,
     String? uid,

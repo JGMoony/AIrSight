@@ -1,9 +1,10 @@
-import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../services/auth_feedback_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/haptic_service.dart';
 import '../../services/tts_service.dart';
 import 'login_screen.dart';
 
@@ -47,14 +48,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _register() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    await HapticService.buttonPress();
+    if (!mounted) return;
     // Si la validación falla, se anuncia verbalmente a TalkBack
     if (!_formKey.currentState!.validate()) {
       _announce('El formulario contiene errores. Por favor revisa los campos señalados.');
       return;
     }
-
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
 
     setState(() {
       _isLoading = true;
@@ -113,6 +115,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _registerWithGoogle() async {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    await HapticService.buttonPress();
+    if (!mounted) return;
 
     setState(() {
       _isLoadingGoogle = true;
@@ -192,6 +196,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const SizedBox(height: 12),
+
+                Center(
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    width: 72,
+                    height: 72,
+                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                  ),
+                ),
+
                 const SizedBox(height: 12),
 
                 Text(
@@ -285,6 +300,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         button: true,
                         child: IconButton(
                           onPressed: () {
+                            HapticService.selection();
                             setState(() {
                               _obscurePassword = !_obscurePassword;
                             });
@@ -331,6 +347,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         button: true,
                         child: IconButton(
                           onPressed: () {
+                            HapticService.selection();
                             setState(() {
                               _obscureConfirmPassword =
                                   !_obscureConfirmPassword;
@@ -365,6 +382,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   button: true,
                   child: ElevatedButton.icon(
                     onPressed: isAnyLoading ? null : _register,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
                     icon: _isLoading
                         ? const SizedBox(
                             width: 18,
@@ -372,8 +392,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.person_add_alt_1),
-                    label: Text(
-                      _isLoading ? 'Registrando...' : 'Registrarme',
+                    label: Flexible(
+                      child: Text(
+                        _isLoading ? 'Registrando...' : 'Registrarme',
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
                 ),
@@ -413,13 +436,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.g_mobiledata_rounded, size: 30),
-                    label: Text(
-                      _isLoadingGoogle
-                          ? 'Conectando con Google...'
-                          : 'Registrarse con Google',
+                    label: Flexible(
+                      child: Text(
+                        _isLoadingGoogle
+                            ? 'Conectando con Google...'
+                            : 'Registrarse con Google',
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       side: BorderSide(
                         color: theme.colorScheme.outlineVariant,
                       ),
@@ -437,6 +463,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     onPressed: isAnyLoading
                         ? null
                         : () {
+                            HapticService.selection();
                             Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
@@ -444,7 +471,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             );
                           },
-                    child: const Text('¿Ya tienes cuenta? Inicia sesión'),
+                    child: const Flexible(
+                      child: Text(
+                        '¿Ya tienes cuenta? Inicia sesión',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ),
                 ),
               ],

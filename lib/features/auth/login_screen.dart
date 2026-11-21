@@ -1,9 +1,10 @@
-import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../services/auth_feedback_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/haptic_service.dart';
 import '../../services/tts_service.dart';
 import 'register_screen.dart';
 
@@ -41,13 +42,14 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    await HapticService.buttonPress();
+    if (!mounted) return;
     if (!_formKey.currentState!.validate()) {
       _announce('El formulario contiene errores. Por favor verifica los campos.');
       return;
     }
-
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
 
     setState(() {
       _isLoading = true;
@@ -102,6 +104,8 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _loginWithGoogle() async {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    await HapticService.buttonPress();
+    if (!mounted) return;
 
     setState(() {
       _isLoadingGoogle = true;
@@ -195,18 +199,24 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx),
+              onPressed: () {
+                HapticService.selection();
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+              },
               child: const Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                await HapticService.buttonPress();
                 final email = resetEmailController.text.trim();
                 if (email.isEmpty || !emailRegex.hasMatch(email)) {
                   _announce('Ingresa un correo electrónico válido.');
                   return;
                 }
 
-                final messenger = ScaffoldMessenger.of(context);
+                if (!ctx.mounted) return;
                 Navigator.pop(ctx);
 
                 try {
@@ -279,10 +289,17 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const SizedBox(height: 32),
 
-                Icon(
-                  Icons.visibility_outlined,
-                  size: 72,
-                  color: theme.colorScheme.primary,
+                Center(
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    width: 96,
+                    height: 96,
+                    errorBuilder: (context, error, stackTrace) => Icon(
+                      Icons.visibility_outlined,
+                      size: 72,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
                 ),
 
                 const SizedBox(height: 16),
@@ -353,6 +370,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         button: true,
                         child: IconButton(
                           onPressed: () {
+                            HapticService.selection();
                             setState(() {
                               _obscurePassword = !_obscurePassword;
                             });
@@ -386,7 +404,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         '¿Olvidaste tu contraseña? Toca dos veces para solicitar el restablecimiento.',
                     button: true,
                     child: TextButton(
-                      onPressed: isAnyLoading ? null : _showForgotPasswordDialog,
+                      onPressed: isAnyLoading
+                          ? null
+                          : () {
+                              HapticService.selection();
+                              _showForgotPasswordDialog();
+                            },
                       child: const Text('¿Olvidaste tu contraseña?'),
                     ),
                   ),
@@ -400,6 +423,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   button: true,
                   child: ElevatedButton.icon(
                     onPressed: isAnyLoading ? null : _login,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
                     icon: _isLoading
                         ? const SizedBox(
                             width: 18,
@@ -407,8 +433,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.login),
-                    label: Text(
-                      _isLoading ? 'Ingresando...' : 'Iniciar sesión',
+                    label: Flexible(
+                      child: Text(
+                        _isLoading ? 'Ingresando...' : 'Iniciar sesión',
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
                 ),
@@ -448,13 +477,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.g_mobiledata_rounded, size: 30),
-                    label: Text(
-                      _isLoadingGoogle
-                          ? 'Conectando con Google...'
-                          : 'Continuar con Google',
+                    label: Flexible(
+                      child: Text(
+                        _isLoadingGoogle
+                            ? 'Conectando con Google...'
+                            : 'Continuar con Google',
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       side: BorderSide(
                         color: theme.colorScheme.outlineVariant,
                       ),
@@ -472,6 +504,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: isAnyLoading
                         ? null
                         : () {
+                            HapticService.selection();
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -480,7 +513,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             );
                           },
                     icon: const Icon(Icons.person_add_alt_1),
-                    label: const Text('¿No tienes cuenta? Regístrate aquí'),
+                    label: const Flexible(
+                      child: Text(
+                        '¿No tienes cuenta? Regístrate aquí',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ),
                 ),
               ],
