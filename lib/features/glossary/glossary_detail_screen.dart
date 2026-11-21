@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../../core/services/progress_service.dart';
-import '../../core/services/tts_service.dart';
+import '../../data/local_user_storage.dart';
+import '../../services/auth_service.dart';
+import '../../services/firestore_service.dart';
+import '../../services/haptic_service.dart';
+import '../../services/progress_service.dart';
+import '../../services/tts_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../admin/admin_word_form_screen.dart';
+import 'glossary_repository.dart';
 import 'glossary_word.dart';
 
 class GlossaryDetailScreen extends StatefulWidget {
@@ -19,11 +25,70 @@ class GlossaryDetailScreen extends StatefulWidget {
 
 class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
   final TtsService _ttsService = TtsService();
+  bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
     ProgressService.registerWordViewed(widget.word.id);
+    _checkAdminRole();
+  }
+
+  Future<void> _checkAdminRole() async {
+    final localUser = await LocalUserStorage.getUser();
+    final firebaseUser = AuthService().currentUser;
+
+    bool admin = localUser?.role == 'admin' ||
+        localUser?.role == 'administrador' ||
+        firebaseUser?.email?.trim().toLowerCase() == 'admin@airsight.com';
+
+    if (!admin && firebaseUser != null) {
+      try {
+        final firestoreUser =
+            await FirestoreService.instance.getUser(firebaseUser.uid);
+        admin = firestoreUser?.isAdmin == true;
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isAdmin = admin;
+    });
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Eliminar palabra?'),
+        content: Text(
+          'Esta acción eliminará "${widget.word.wordEn}" de la base de datos de Firestore.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      await GlossaryRepository.deleteWord(widget.word.id);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Palabra "${widget.word.wordEn}" eliminada de Firestore.'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
   }
 
   @override
@@ -33,29 +98,37 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
   }
 
   Future<void> _speakEnglishNormal() async {
+    await HapticService.selection();
     await ProgressService.registerAudioPlay();
     await _ttsService.speakEnglish(widget.word.wordEn);
   }
 
   Future<void> _speakEnglishSlow() async {
+    await HapticService.selection();
     await ProgressService.registerAudioPlay();
     await _ttsService.speakEnglishSlow(widget.word.wordEn);
   }
 
   Future<void> _speakSpanishWord() async {
+    await HapticService.selection();
     await ProgressService.registerAudioPlay();
     await _ttsService.speakSpanish(widget.word.wordEs);
   }
 
   Future<void> _speakExample() async {
+    await HapticService.selection();
     await ProgressService.registerAudioPlay();
 
-    await _ttsService.speakEnglish(widget.word.example);
-
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    await _ttsService.speakSpanish(
-      '${widget.word.wordEn} significa ${widget.word.wordEs}.',
+    // Secuencia asíncrona de audio TTS:
+    // 1. Detiene cualquier locución previa del motor TTS.
+    // 2. Reproduce la oración en inglés (en-US).
+    // 3. Espera la finalización completa con awaitSpeakCompletion.
+    // 4. Pausa de cortesía (~300 ms).
+    // 5. Reproduce la traducción contextual completa en español (es-ES).
+    await _ttsService.speakBilingual(
+      textEn: widget.word.exampleEn,
+      textEs: widget.word.exampleEs,
+      pause: const Duration(milliseconds: 300),
     );
   }
 
@@ -98,6 +171,32 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(word.wordEn),
+        actions: [
+          if (_isAdmin) ...[
+            IconButton(
+              icon: const Icon(Icons.edit_rounded, color: AppTheme.primaryLight),
+              tooltip: 'Editar palabra',
+              onPressed: () async {
+                HapticService.selection();
+                final updated = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AdminWordFormScreen(wordToEdit: widget.word),
+                  ),
+                );
+                if (updated == true) {
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+              tooltip: 'Eliminar palabra',
+              onPressed: _confirmDelete,
+            ),
+          ],
+        ],
       ),
       body: SafeArea(
         child: ListView(
@@ -105,7 +204,7 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
           children: [
             Semantics(
               label:
-                  'Detalle de palabra. ${word.wordEn}. Traducción ${word.wordEs}. Categoría ${word.category}. Ejemplo en inglés: ${word.example}',
+                  'Detalle de palabra. ${word.wordEn}. Traducción: ${word.wordEs}. Categoría: ${word.category}. Ejemplo en inglés: ${word.exampleEn}. Traducción del ejemplo: ${word.exampleEs}.',
               child: Card(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
@@ -118,7 +217,7 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: categoryColor.withOpacity(0.12),
+                          color: categoryColor.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
@@ -136,6 +235,16 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
                           fontSize: 38,
                           fontWeight: FontWeight.w900,
                           color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        word.phonetic,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primary,
+                          fontFamily: 'monospace',
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -156,20 +265,25 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
+                      // Línea 1: Oración en inglés con énfasis tipográfico
                       Text(
-                        word.example,
+                        word.exampleEn,
                         style: const TextStyle(
-                          fontSize: 19,
+                          fontSize: 20,
                           height: 1.35,
                           fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 8),
+                      // Línea 2: Traducción contextual íntegra al español (contraste accesible WCAG 2.2 AA)
                       Text(
-                        '${word.wordEn} significa ${word.wordEs}.',
+                        word.exampleEs,
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 17,
                           height: 1.35,
+                          fontWeight: FontWeight.w500,
                           color: AppTheme.textSecondary,
                         ),
                       ),
@@ -181,62 +295,97 @@ class _GlossaryDetailScreenState extends State<GlossaryDetailScreen> {
 
             const SizedBox(height: 22),
 
+            // Encabezado de la sección de controles de audio
             Semantics(
-              button: true,
-              label: 'Escuchar palabra en inglés normal ${word.wordEn}',
-              child: ElevatedButton.icon(
-                onPressed: _speakEnglishNormal,
-                icon: const Icon(Icons.volume_up_rounded),
-                label: Text('Escuchar "${word.wordEn}"'),
+              header: true,
+              label: 'Controles de pronunciación y audio',
+              child: const Text(
+                'Pronunciación',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
 
             const SizedBox(height: 12),
 
-            Semantics(
-              button: true,
-              label: 'Escuchar palabra en inglés lentamente ${word.wordEn}',
-              child: OutlinedButton.icon(
-                onPressed: _speakEnglishSlow,
-                icon: const Icon(Icons.slow_motion_video_rounded),
-                label: const Text('Escuchar en inglés lento'),
-              ),
+            // Agrupación de botones de inglés: velocidad normal y lenta
+            Row(
+              children: [
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    label: 'Escuchar ${word.wordEn} a velocidad normal',
+                    child: ElevatedButton.icon(
+                      onPressed: _speakEnglishNormal,
+                      icon: const Icon(Icons.volume_up_rounded),
+                      label: const Text('Normal'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    label: 'Escuchar ${word.wordEn} a velocidad lenta',
+                    child: OutlinedButton.icon(
+                      onPressed: _speakEnglishSlow,
+                      icon: const Icon(Icons.slow_motion_video_rounded),
+                      label: const Text('Lenta'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
 
             const SizedBox(height: 12),
 
+            // Pronunciación en español
             Semantics(
               button: true,
-              label: 'Escuchar palabra en español ${word.wordEs}',
+              label: 'Escuchar ${word.wordEs} en español',
               child: OutlinedButton.icon(
                 onPressed: _speakSpanishWord,
                 icon: const Icon(Icons.translate_rounded),
-                label: Text('Escuchar "${word.wordEs}"'),
+                label: Flexible(
+                  child: Text(
+                    'Español: "${word.wordEs}"',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
               ),
             ),
 
             const SizedBox(height: 12),
 
+            // Botón de ejemplo bilingüe (único botón de ejemplo, sin botón redundante de detener)
             Semantics(
               button: true,
-              label:
-                  'Escuchar ejemplo en inglés y explicación en español para ${word.wordEn}',
-              child: ElevatedButton.icon(
+              label: 'Escuchar ejemplo de uso en inglés y español',
+              child: FilledButton.icon(
                 onPressed: _speakExample,
                 icon: const Icon(Icons.record_voice_over_rounded),
-                label: const Text('Escuchar ejemplo bilingüe'),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            Semantics(
-              button: true,
-              label: 'Detener audio',
-              child: TextButton.icon(
-                onPressed: _ttsService.stop,
-                icon: const Icon(Icons.stop_circle_outlined),
-                label: const Text('Detener audio'),
+                label: const Flexible(
+                  child: Text(
+                    'Escuchar ejemplo bilingüe',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
               ),
             ),
           ],

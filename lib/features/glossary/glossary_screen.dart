@@ -1,9 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 
-import '../../core/services/tts_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/haptic_service.dart';
+import '../../services/tts_service.dart';
+import '../../services/voice_search_service.dart';
 import '../../core/theme/app_theme.dart';
-import 'glossary_data.dart';
+import '../../data/local_user_storage.dart';
+import '../../services/firestore_service.dart';
+import '../admin/admin_word_form_screen.dart';
 import 'glossary_detail_screen.dart';
+import 'glossary_repository.dart';
 import 'glossary_word.dart';
 
 class GlossaryScreen extends StatefulWidget {
@@ -15,20 +23,175 @@ class GlossaryScreen extends StatefulWidget {
 
 class _GlossaryScreenState extends State<GlossaryScreen> {
   final TtsService _ttsService = TtsService();
+  final VoiceSearchService _voiceService = VoiceSearchService();
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
+  StreamSubscription<List<GlossaryWord>>? _wordsSubscription;
+
+  List<GlossaryWord> _words = [];
+  bool _isLoading = true;
+  bool _isAdmin = false;
+  bool _isListening = false;
   String searchText = '';
   String selectedCategory = 'Todas';
 
+  /// Emite un anuncio semántico accesible para lectores de pantalla TalkBack (WCAG 2.2 AA).
+  void _announce(String message) {
+    // ignore: deprecated_member_use
+    SemanticsService.announce(message, TextDirection.ltr);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAdminRole();
+    _listenToGlossaryStream();
+  }
+
+  void _listenToGlossaryStream() {
+    _wordsSubscription = GlossaryRepository.streamWords().listen(
+      (words) {
+        if (!mounted) return;
+        setState(() {
+          _words = words;
+          _isLoading = false;
+        });
+      },
+      onError: (_) {
+        if (!mounted) return;
+        _loadFallbackWords();
+      },
+    );
+  }
+
+  Future<void> _loadWords() async {
+    final words = await GlossaryRepository.getWords();
+    if (!mounted) return;
+    setState(() {
+      _words = words;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _loadFallbackWords() => _loadWords();
+
+  Future<void> _checkAdminRole() async {
+    final localUser = await LocalUserStorage.getUser();
+    final firebaseUser = AuthService().currentUser;
+
+    bool admin = localUser?.role == 'admin' ||
+        localUser?.role == 'administrador' ||
+        firebaseUser?.email?.trim().toLowerCase() == 'admin@airsight.com';
+
+    if (!admin && firebaseUser != null) {
+      try {
+        final firestoreUser =
+            await FirestoreService.instance.getUser(firebaseUser.uid);
+        admin = firestoreUser?.isAdmin == true;
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isAdmin = admin;
+    });
+  }
+
   @override
   void dispose() {
+    _wordsSubscription?.cancel();
+    _scrollController.dispose();
     _ttsService.stop();
+    _voiceService.stop();
     _searchController.dispose();
     super.dispose();
   }
 
+  void _selectCategory(String category) {
+    HapticService.selection();
+    setState(() {
+      selectedCategory = category;
+    });
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        440.0,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  Future<void> _toggleVoiceSearch() async {
+    await HapticService.selection();
+    if (_isListening) {
+      await _voiceService.stop();
+      setState(() {
+        _isListening = false;
+      });
+      return;
+    }
+
+    final started = await _voiceService.startListening(
+      localeId: 'es_CO',
+      onResult: (text, isFinal) {
+        setState(() {
+          searchText = text;
+          _searchController.text = text;
+        });
+
+        if (isFinal) {
+          setState(() {
+            _isListening = false;
+          });
+          _evaluateSearchResults(text);
+        }
+      },
+      onError: (err) {
+        setState(() {
+          _isListening = false;
+        });
+        _announce('No se detectó audio del micrófono.');
+      },
+    );
+
+    if (started) {
+      setState(() {
+        _isListening = true;
+      });
+      _announce(
+        'Micrófono activado. Di una palabra clave para buscar en el glosario.',
+      );
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo acceder al micrófono.')),
+      );
+    }
+  }
+
+  Future<void> _evaluateSearchResults(String query) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return;
+
+    final results = _filteredWords;
+
+    if (results.isEmpty) {
+      // Criterio de aceptación IEEE 830 HU-06:
+      const notFoundMessage =
+          'La palabra no se encuentra disponible en el glosario A1.';
+      _announce(notFoundMessage);
+      await _ttsService.speakSpanish(notFoundMessage);
+    } else {
+      final foundMessage =
+          'Se encontraron ${results.length} coincidencias para "$cleanQuery".';
+      _announce(foundMessage);
+      await _ttsService.speakSpanish(foundMessage);
+    }
+  }
+
   List<String> get _categories {
-    final categories = glossaryWords.map((word) => word.category).toSet().toList()
+    final categories = _words.map((word) => word.category).toSet().toList()
       ..sort();
 
     return ['Todas', ...categories];
@@ -36,22 +199,34 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
 
   int _countByCategory(String category) {
     if (category == 'Todas') {
-      return glossaryWords.length;
+      return _words.length;
     }
 
-    return glossaryWords.where((word) => word.category == category).length;
+    return _words.where((word) => word.category == category).length;
+  }
+
+  /// Normaliza una cadena de texto para búsquedas insensibles a mayúsculas y acentos diacríticos
+  /// (ej. "platano" coincide con "plátano", "boligrafo" con "bolígrafo").
+  String _normalizeText(String input) {
+    const withAccents = 'áàäâãéèëêíìïîóòöôõúùüûÁÀÄÂÃÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛ';
+    const withoutAccents = 'aaaaaeeeeiiiiooooouuuuaaaaaeeeeiiiiooooouuuu';
+    var result = input.toLowerCase().trim();
+    for (int i = 0; i < withAccents.length; i++) {
+      result = result.replaceAll(withAccents[i], withoutAccents[i]);
+    }
+    return result;
   }
 
   List<GlossaryWord> get _filteredWords {
-    final query = searchText.toLowerCase().trim();
+    final query = _normalizeText(searchText);
 
-    final words = glossaryWords.where((word) {
+    final words = _words.where((word) {
       final matchesSearch = query.isEmpty ||
-          word.wordEn.toLowerCase().contains(query) ||
-          word.wordEs.toLowerCase().contains(query) ||
-          word.category.toLowerCase().contains(query) ||
+          _normalizeText(word.wordEn).contains(query) ||
+          _normalizeText(word.wordEs).contains(query) ||
+          _normalizeText(word.category).contains(query) ||
           word.aliases.any(
-            (alias) => alias.toLowerCase().contains(query),
+            (alias) => _normalizeText(alias).contains(query),
           );
 
       final matchesCategory =
@@ -61,13 +236,14 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
     }).toList();
 
     words.sort(
-      (a, b) => b.wordEn.toLowerCase().compareTo(a.wordEn.toLowerCase()),
+      (a, b) => a.wordEn.toLowerCase().compareTo(b.wordEn.toLowerCase()),
     );
 
     return words;
   }
 
   Future<void> _playWord(GlossaryWord word) async {
+    await HapticService.selection();
     await _ttsService.speakEnglish(word.wordEn);
   }
 
@@ -138,6 +314,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
   }
 
   void _openDetail(GlossaryWord word) {
+    HapticService.selection();
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -146,18 +323,131 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
     );
   }
 
+  Future<void> _showAdminMenu() async {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    'Gestión de Vocabulario (Admin)',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.add_circle_outline, color: AppTheme.primary),
+                  title: const Text('Agregar nueva palabra A1'),
+                  subtitle: const Text('Crear un nuevo término con traducción y ejemplo'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _navigateToAddWord();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.restart_alt_rounded, color: Colors.orange),
+                  title: const Text('Restaurar catálogo base'),
+                  subtitle: const Text('Reiniciar a las 102 palabras predeterminadas'),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    await GlossaryRepository.resetToDefault();
+                    await _loadWords();
+                    _announce('Catálogo restaurado a valores base.');
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Catálogo restaurado a las 102 palabras originales.')),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _navigateToAddWord() async {
+    HapticService.selection();
+    final added = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const AdminWordFormScreen(),
+      ),
+    );
+    if (added == true) {
+      await _loadWords();
+    }
+  }
+
+  Future<void> _editWord(GlossaryWord word) async {
+    HapticService.selection();
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminWordFormScreen(wordToEdit: word),
+      ),
+    );
+    if (updated == true) {
+      await _loadWords();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredWords = _filteredWords;
-    final totalCategories = glossaryWords.map((word) => word.category).toSet().length;
+    final totalCategories = _words.map((word) => word.category).toSet().length;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Glosario A1'),
+        actions: [
+          if (_isAdmin)
+            Semantics(
+              label: 'Administrar vocabulario A1',
+              button: true,
+              child: IconButton(
+                icon: const Icon(Icons.tune_rounded),
+                tooltip: 'Gestionar vocabulario (Admin)',
+                onPressed: _showAdminMenu,
+              ),
+            ),
+        ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+        child: _isLoading && _words.isEmpty
+            ? Center(
+                child: Semantics(
+                  label: 'Cargando glosario desde la base de datos...',
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        'Cargando glosario...',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : ListView(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
           children: [
             Text(
               'Explora y aprende vocabulario básico',
@@ -170,91 +460,109 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
 
             _SearchBox(
               controller: _searchController,
+              isListening: _isListening,
+              onMicPressed: _toggleVoiceSearch,
+              onSubmitted: _evaluateSearchResults,
               onChanged: (value) {
                 setState(() {
                   searchText = value;
                 });
               },
               onClear: () {
+                HapticService.selection();
                 setState(() {
                   searchText = '';
                   _searchController.clear();
                 });
-              },
-            ),
-
-            const SizedBox(height: 20),
-
-            _SummaryCard(
-              totalWords: glossaryWords.length,
-              totalCategories: totalCategories,
-            ),
-
-            const SizedBox(height: 20),
-
-            const Text(
-              'Categorías',
-              style: TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _categories.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.92,
-              ),
-              itemBuilder: (context, index) {
-                final category = _categories[index];
-                final isSelected = selectedCategory == category;
-                final color = _colorForCategory(category);
-
-                return _CategoryCard(
-                  category: category,
-                  count: _countByCategory(category),
-                  icon: _iconForCategory(category),
-                  color: color,
-                  isSelected: isSelected,
-                  onTap: () {
-                    setState(() {
-                      selectedCategory = category;
-                    });
-                  },
+                _announce(
+                  'Búsqueda borrada. Mostrando todas las categorías.',
                 );
               },
             ),
 
+            if (searchText.trim().isEmpty) ...[
+              const SizedBox(height: 20),
+
+              _SummaryCard(
+                totalWords: _words.length,
+                totalCategories: totalCategories,
+              ),
+
+              const SizedBox(height: 20),
+
+              const Text(
+                'Categorías',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _categories.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: MediaQuery.textScalerOf(context).scale(1.0) >= 1.4
+                      ? 0.72
+                      : (MediaQuery.textScalerOf(context).scale(1.0) >= 1.2 ? 0.80 : 0.92),
+                ),
+                itemBuilder: (context, index) {
+                  final category = _categories[index];
+                  final isSelected = selectedCategory == category;
+                  final color = _colorForCategory(category);
+
+                  return _CategoryCard(
+                    category: category,
+                    count: _countByCategory(category),
+                    icon: _iconForCategory(category),
+                    color: color,
+                    isSelected: isSelected,
+                    onTap: () => _selectCategory(category),
+                  );
+                },
+              ),
+            ],
+
             const SizedBox(height: 22),
 
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    selectedCategory == 'Todas'
-                        ? 'Todas las palabras'
-                        : 'Palabras de $selectedCategory',
-                    style: const TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.w900,
+            Semantics(
+              header: true,
+              liveRegion: true,
+              label: searchText.trim().isNotEmpty
+                  ? 'Resultados de búsqueda: ${filteredWords.length} palabras encontradas'
+                  : (selectedCategory == 'Todas'
+                      ? 'Todas las palabras: ${filteredWords.length} disponibles'
+                      : 'Palabras de $selectedCategory: ${filteredWords.length} disponibles'),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      searchText.trim().isNotEmpty
+                          ? 'Resultados para "${searchText.trim()}"'
+                          : (selectedCategory == 'Todas'
+                              ? 'Todas las palabras'
+                              : 'Palabras de $selectedCategory'),
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
-                ),
-                Text(
-                  '${filteredWords.length}',
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w700,
+                  Text(
+                    '${filteredWords.length}',
+                    style: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
 
             const SizedBox(height: 12),
@@ -270,6 +578,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                     categoryColor: _colorForCategory(word.category),
                     onTap: () => _openDetail(word),
                     onPlay: () => _playWord(word),
+                    onEdit: _isAdmin ? () => _editWord(word) : null,
                   ),
                 ),
               ),
@@ -284,11 +593,17 @@ class _SearchBox extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
+  final bool isListening;
+  final VoidCallback onMicPressed;
+  final ValueChanged<String> onSubmitted;
 
   const _SearchBox({
     required this.controller,
     required this.onChanged,
     required this.onClear,
+    required this.isListening,
+    required this.onMicPressed,
+    required this.onSubmitted,
   });
 
   @override
@@ -299,18 +614,54 @@ class _SearchBox extends StatelessWidget {
       child: TextField(
         controller: controller,
         textInputAction: TextInputAction.search,
+        onSubmitted: onSubmitted,
+        style: const TextStyle(color: AppTheme.textPrimary),
         decoration: InputDecoration(
-          hintText: 'Buscar palabra...',
-          prefixIcon: const Icon(Icons.search_rounded),
-          suffixIcon: controller.text.isEmpty
-              ? null
-              : IconButton(
+          hintText: isListening ? 'Escuchando tu voz...' : 'Buscar palabra...',
+          hintStyle: const TextStyle(color: AppTheme.textSecondary),
+          prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecondary),
+          suffixIcon: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (controller.text.isNotEmpty)
+                IconButton(
                   onPressed: onClear,
-                  icon: const Icon(Icons.close_rounded),
+                  icon: const Icon(Icons.close_rounded, color: AppTheme.textSecondary),
+                  tooltip: 'Borrar búsqueda',
                 ),
+              Semantics(
+                label: isListening
+                    ? 'Detener escucha de micrófono'
+                    : 'Buscar palabra por voz',
+                hint: isListening
+                    ? 'Toca dos veces para detener'
+                    : 'Toca dos veces para dictar el término a filtrar',
+                button: true,
+                child: IconButton(
+                  onPressed: onMicPressed,
+                  icon: Icon(
+                    isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                    color: isListening ? Colors.red : AppTheme.primaryLight,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
+          ),
           filled: true,
+          fillColor: AppTheme.surface,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
           ),
         ),
         onChanged: onChanged,
@@ -333,21 +684,29 @@ class _SummaryCard extends StatelessWidget {
     return Semantics(
       label: '$totalWords palabras y $totalCategories categorías disponibles',
       child: Card(
+        color: AppTheme.surface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Row(
             children: [
               Container(
-                width: 54,
-                height: 54,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(20),
+                  color: AppTheme.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(
                   Icons.menu_book_rounded,
-                  color: AppTheme.primary,
-                  size: 30,
+                  color: AppTheme.primaryLight,
+                  size: 28,
                 ),
               ),
               const SizedBox(width: 14),
@@ -357,6 +716,7 @@ class _SummaryCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
               ),
@@ -392,57 +752,68 @@ class _CategoryCard extends StatelessWidget {
       button: true,
       selected: isSelected,
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isSelected ? color : Colors.transparent,
-              width: 2,
+              color: isSelected ? color : Colors.white.withValues(alpha: 0.08),
+              width: isSelected ? 2 : 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.25),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
           ),
           padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 50,
-                height: 50,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
+                  color: color.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   icon,
                   color: color,
-                  size: 27,
+                  size: 26,
                 ),
               ),
               const SizedBox(height: 10),
-              Text(
-                category,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    category,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                '$count palabras',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '$count palabras',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
                 ),
               ),
             ],
@@ -458,23 +829,33 @@ class _WordCard extends StatelessWidget {
   final Color categoryColor;
   final VoidCallback onTap;
   final VoidCallback onPlay;
+  final VoidCallback? onEdit;
 
   const _WordCard({
     required this.word,
     required this.categoryColor,
     required this.onTap,
     required this.onPlay,
+    this.onEdit,
   });
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       label:
-          '${word.wordEn}, ${word.wordEs}, categoría ${word.category}. Toca dos veces para ver detalle.',
+          '${word.wordEn}, que significa ${word.wordEs}. Toca dos veces para ver detalles completos.',
       button: true,
       child: Card(
+        color: AppTheme.surface,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(18),
@@ -490,7 +871,7 @@ class _WordCard extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: categoryColor.withOpacity(0.12),
+                          color: categoryColor.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
@@ -506,8 +887,19 @@ class _WordCard extends StatelessWidget {
                       Text(
                         word.wordEn,
                         style: const TextStyle(
-                          fontSize: 21,
+                          fontSize: 22,
                           fontWeight: FontWeight.w900,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        word.phonetic,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primary,
+                          fontFamily: 'monospace',
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -520,22 +912,57 @@ class _WordCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '"${word.example}"',
+                        '"${word.exampleEn}"',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: AppTheme.textSecondary,
                           fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
+                      if (word.exampleEs.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          word.exampleEs,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.45),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
+                if (onEdit != null) ...[
+                  Semantics(
+                    label: 'Editar palabra ${word.wordEn}, botón',
+                    button: true,
+                    child: IconButton.filledTonal(
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.orange.withValues(alpha: 0.15),
+                        foregroundColor: Colors.orange.shade800,
+                        minimumSize: const Size(48, 48),
+                      ),
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_rounded),
+                      tooltip: 'Editar palabra',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Semantics(
-                  label: 'Escuchar palabra ${word.wordEn}',
+                  label: 'Escuchar pronunciación de ${word.wordEn}',
                   button: true,
                   child: IconButton.filledTonal(
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppTheme.primary.withValues(alpha: 0.15),
+                      foregroundColor: AppTheme.primaryLight,
+                      minimumSize: const Size(48, 48),
+                    ),
                     onPressed: onPlay,
                     icon: const Icon(Icons.volume_up_rounded),
                   ),

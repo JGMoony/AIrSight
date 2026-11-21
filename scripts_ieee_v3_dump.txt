@@ -1,0 +1,675 @@
+﻿DISEÑO, DESARROLLO Y VALIDACIÓN DE UN PROTOTIPO MÓVIL PARA FORTALECER EL APRENDIZAJE DE VOCABULARIO EN INGLÉS NIVEL A1 MEDIANTE DESCRIPCIÓN DE OBJETOS, PRÁCTICAS GAMIFICADAS Y GLOSARIO CON APOYO DE INTELIGENCIA ARTIFICIAL, DIRIGIDO A ESTUDIANTES CON DISCAPACIDAD VISUAL DE LA UNIVERSIDAD DE CUNDINAMARCA, SEDE FACATATIVÁ
+ESPECIFICACIÓN DE REQUITOS SEGÚN EL ESTÁNDAR IEEE 830
+
+
+
+
+
+AUTOR
+LISETH JOHANNA GOMEZ ARIZA
+
+
+
+
+DIRECTOR
+FREDDY ORLANDO MARTINEZ BERNAL
+
+
+
+
+
+
+
+UNIVERSIDAD DE CUNDINAMARCA FACATATIVÁ
+INGENIERÍA DE SISTEMAS Y COMPUTACIÓN
+2026/08
+
+Contenido
+1.	Introducción	3
+1.1.	Propósito	3
+1.2.	Alcance	3
+1.3.	Ámbito del sistema	3
+1.4.	Definiciones, Acrónimos y Abreviaturas	3
+1.5.	Referencias	3
+1.6.	Visión general del proyecto	3
+2.	Descripción General	3
+2.1.	Perspectiva del Producto	3
+2.2.	Funciones del producto	3
+2.3.	Características de los usuarios	3
+2.4.	Restricciones	3
+2.5.	Suposiciones y Dependencias	3
+2.6.	Requisitos Futuros	3
+3.	Requisitos Específicos	3
+3.1.	Interfaces Externas	3
+3.1.1.	Interfaz de Usuario	3
+3.1.2.	Interfaz de Hardware	3
+3.1.3.	Interfaz de Software	3
+3.2.	Funciones	3
+3.2.1.	Requerimientos Funcionales	3
+3.2.2.	Requerimientos No Funcionales	3
+3.2.3.	Requisitos de Rendimiento	3
+3.3.	Restricciones de Diseño	3
+3.4.	Atributos del Sistema	3
+3.5.	Otros Requisitos	3
+4.	Apéndices	3
+
+
+
+Introducción
+Propósito
+El propósito de este documento es definir y estructurar la Especificación de Requisitos de Software (SRS) para el prototipo de aplicación móvil accesible enfocado en estudiantes con discapacidad visual de la Universidad de Cundinamarca (Extensión Facatativá). Este SRS especifica los requerimientos funcionales y no funcionales del aplicativo, cuyo objetivo principal es ofrecer una herramienta tecnológica complementaria que mitigue la dependencia de recursos visuales en la práctica autónoma de vocabulario en inglés nivel A1 mediante visión por computador y síntesis de voz.
+La propuesta establece los criterios de ingeniería para evaluar la accesibilidad técnica del software bajo las pautas WCAG 2.2 (Nivel AA) y la usabilidad del prototipo mediante pruebas de interacción con el lector de pantalla TalkBack. Asimismo, el documento define los requerimientos para el registro de métricas cuantitativas de uso que respaldarán la posterior observación descriptiva de cambios en el desempeño de vocabulario A1 (los cuales se evalúan de forma independiente a través de instrumentos pretest y postest), distinguiendo rigurosamente la usabilidad y percepción de utilidad frente a la evidencia del desempeño pedagógico.
+
+Alcance
+El sistema a desarrollar corresponde a un Producto Mínimo Viable (MVP) en formato de aplicación móvil accesible nativa para el sistema operativo Android. Su propósito se delimita al apoyo complementario en la práctica autónoma y el refuerzo de un catálogo inicial de vocabulario situado en un rango de 80 a 150 palabras y frases de uso frecuente, tomando como base estructurada un corpus central de 102 términos esenciales del nivel A1 del Marco Común Europeo de Referencia para las Lenguas (MCER), distribuidos en cuatro categorías cotidianas: útiles de estudio, tecnología, objetos de uso personal y alimentos.
+Las funcionalidades esenciales que delimitan el alcance del prototipo comprenden:
+Módulo de Visión Artificial: Reconocimiento de objetos del entorno cotidiano mediante la captura fotográfica puntual desde la cámara del dispositivo móvil. La imagen se transmite a un servicio de inferencia en la nube a través de una API multimodal de inteligencia artificial, la cual procesa la entrada visual y devuelve una clasificación estructurada restringida al vocabulario controlado del glosario. Este módulo opera con un umbral de certeza mínimo para asegurar la precisión léxica y entrega su salida mediante retroalimentación multimodal (texto en pantalla, confirmación háptica y locución auditiva bilingüe).
+Glosario Accesible A1: Catálogo de vocabulario estructurado por categorías temáticas que almacena localmente el corpus base de 102 palabras para consulta sin conexión y se sincroniza con una base de datos en la nube (Cloud Firestore). El módulo integra síntesis de voz (Text-to-Speech) local para la reproducción inmediata de pronunciaciones y ejemplos bilingües, garantizando accesibilidad total para el lector de pantalla TalkBack (Android 10 o superior) mediante orden de foco lógico y etiquetado semántico. Asimismo, contempla una interfaz simplificada para que el usuario con rol de Administrador pueda registrar y actualizar entradas de vocabulario directamente desde el aplicativo móvil, persistiendo los cambios en la nube.
+Módulo de Búsqueda y Consulta por Voz: Interfaz de entrada accesible que utiliza reconocimiento de voz nativo en el dispositivo (Speech-to-Text) para permitir al estudiante formular consultas fonéticas orales sobre cómo se pronuncia o traduce una palabra, recibiendo la respuesta sonora y contextualizada sin necesidad de interactuar visualmente con el teclado.
+Prácticas Gamificadas: Microlecciones y dinámicas breves de asociación auditiva orientadas a reforzar la retención de los términos mediante mecánicas de progreso, retos de respuesta rápida y retroalimentación sonora inmediata que complementan los indicadores gráficos para usuarios con discapacidad visual.
+Registro de Progreso e Interacciones: Registro local y en la nube de métricas operativas de uso (palabras consultadas, lecciones completadas y respuestas acertadas), orientado al auto-seguimiento del estudiante y a la recolección de evidencia cuantitativa durante el piloto de validación.
+Exclusiones del alcance: 
+El proyecto no contempla el desarrollo de paneles administrativos web externos o independientes (la gestión centralizada se realiza mediante la consola web de servicios en la nube de Firebase), ni la integración con sistemas de gestión académica institucional (LMS o registro de notas de la universidad). De igual manera, se excluye la cobertura de niveles de competencia lingüística superiores (A2, B1 o B2) y la pretensión de demostrar causalidad exclusiva en el aprendizaje del idioma a largo plazo.
+
+Ámbito del sistema
+La aplicación móvil se clasifica como un producto software independiente dentro de la categoría de Herramientas Asistivas y de Refuerzo Educativo. No requiere integraciones ni dependencias con las bases de datos académicas institucionales de la Universidad de Cundinamarca. Su función es actuar como un recurso tecnológico dinámico y complementario para apoyar la práctica autónoma de vocabulario por parte de los estudiantes. 
+
+Definiciones, Acrónimos y Abreviaturas
+Nombre
+Descripción
+
+A1
+Nivel básico de competencia en inglés, según el Marco Común Europeo de Referencia (MCER).
+
+API
+Interfaz de programación de aplicaciones.
+
+TTS
+Text-to-Speech (síntesis de voz).
+
+IA
+Inteligencia Artificial.
+
+MVP
+Producto mínimo viable.
+
+CRUD
+Acrónimo que representa las cuatro funciones básicas:
+Crear (Create): Inserción de nuevos registros.
+Leer (Read): Consulta de datos existentes.
+Actualizar (Update): Modificación de registros existentes.
+Eliminar (Delete): Borrado de registros.
+
+
+Referencias
+Cambridge Assessment English & English Profile (2015): English Vocabulary Profile: An interactive resource on the vocabulary of English at CEFR levels A1-C2. Referencia pedagógica utilizada para la selección y delimitación del corpus base de 102 términos de nivel A1.
+IEEE Computer Society (1998): IEEE Std 830-1998: IEEE Recommended Practice for Software Requirements Specifications. Instituto de Ingenieros Eléctricos y Electrónicos. Estándar metodológico aplicado para la estructuración y redacción del presente documento de requisitos.
+W3C (2023): Web Content Accessibility Guidelines (WCAG) 2.2. World Wide Web Consortium. Directrices y criterios de éxito de nivel AA adoptados para el diseño accesible móvil, destacando:
+Criterio 1.1.1 (Contenido no textual): Proveer alternativas textuales y etiquetas semánticas a todos los elementos interactivos e iconos.
+Criterio 1.4.3 (Contraste mínimo): Garantizar una relación de contraste visual superior a 4.5:1 en elementos de texto e interfaz para usuarios con baja visión.
+Criterio 2.1.1 (Teclado y gestos): Asegurar operabilidad completa mediante gestos lineales estándar del lector de pantalla TalkBack.
+Criterio 2.5.5 (Tamaño del objetivo táctil): Definir áreas de contacto mínimas de 48 por 48 píxeles independientes de densidad (dp).
+Criterio 4.1.2 (Nombre, función, valor): Asignar roles y estados identificables por las APIs de accesibilidad del sistema operativo Android.
+Documentación Técnica de APIs de Visión y Modelos Multimodales en la Nube: Guías de integración y consumo de servicios REST para inferencia visual asistida y procesamiento de lenguaje natural.
+Google Firebase Documentation (2024): Especificaciones de arquitectura para autenticación de usuarios (Firebase Authentication) y sincronización de bases de datos NoSQL en la nube (Cloud Firestore).
+Congreso de la República de Colombia (2012): Ley Estatutaria 1581 de 2012 por la cual se dictan disposiciones generales para la protección de datos personales. Marco regulatorio para el tratamiento y almacenamiento seguro de la información de los usuarios participantes.
+
+Visión general del proyecto
+Este documento se estructura bajo los lineamientos del estándar IEEE 830. La sección 2 presenta la descripción general del producto, las características de los usuarios objetivos, las restricciones técnicas y las suposiciones del proyecto. La sección 3 detalla los requerimientos específicos, incluyendo las interfaces externas, los requerimientos funcionales del MVP y los requerimientos no funcionales orientados a la accesibilidad, rendimiento y seguridad.
+
+Descripción General
+Perspectiva del Producto
+El aplicativo es un desarrollo de software independiente que se ubica en la intersección entre la Inteligencia Artificial (IA) y la tecnología asistiva. Funciona como un recurso de apoyo autónomo y no requiere integraciones directas ni dependencias con los sistemas de gestión académica (LMS) de la Universidad de Cundinamarca.
+Su atributo diferencial es el enfoque de diseño inclusivo desde el origen: todas las interfaces y flujos de trabajo están optimizados para la interacción mediante salida auditiva y retroalimentación háptica, garantizando la compatibilidad total con los lectores de pantalla nativos de los dispositivos móviles (Talback en Android).
+
+Funciones del producto
+El Producto Mínimo Viable (MVP) integra las siguientes funciones principales para el refuerzo del vocabulario en inglés nivel A1:
+Reconocimiento y Descripción de Objetos con IA: Captura de imágenes mediante la cámara del dispositivo y procesamiento con visión por computador para identificar objetos cotidianos, generando la descripción auditiva correspondiente en inglés y español.
+Síntesis de Voz (TTS) e Interacción Sonora: Conversión de texto a audio para la pronunciación de vocabulario, ejemplos e instrucciones de la interfaz, acompañada de respuestas hápticas (vibración) para confirmar acciones o indicar errores
+Glosario Accesible A1: Consulta estructurada por categorías de un catálogo inicial de vocabulario A1 (80 a 150 palabras) con apoyo de audio descriptivo.
+Micro-lecciones y Práctica Gamificada: Ejercicios auditivos breves de identificación y repetición de vocabulario con dinámicas sencillas de conteo de aciertos para estimular la práctica autónoma.
+Registro de Progreso Básico: Monitoreo del historial de consulta del estudiante y desempeño en las prácticas para auto-seguimiento y recolección de métricas del piloto de validación.
+Características de los usuarios
+Tipo de Usuario
+Privilegiado
+
+Nombre de Usuario
+Administrador del Sistema
+
+Descripción
+El usuario administrador del sistema es el encargado de:
+Tener acceso ilimitado a todas las áreas del sistema. Puede ver, modificar, agregar o eliminar cualquier información o configuración.
+Crear y administrar cuentas de usuario (estudiantes), asignando permisos y asegurando la seguridad.
+Realizar tareas de mantenimiento como copias de seguridad, restauración de datos, actualizaciones del software y gestión de accesibilidad.
+
+Nivel de Educación Requerida
+Título profesional en Ingeniería de Sistemas, Ingeniería de Software o áreas a fines.
+
+Experiencia Requerida
+Experiencia mínima de 1 año de gestión de sistemas informáticos o desarrollo de software.
+
+Experiencia Técnica Requerida
+Conocimientos técnicos en sistemas de información (gestión de bases de datos y seguridad informática).
+Desarrollo y soporte de software.
+Administración de redes y sistemas.
+Gestión de proyectos y análisis de datos.
+
+
+Tipo de Usuario
+No privilegiado
+
+Nombre de Usuario
+Estudiante 
+
+Descripción
+Usuario principal y beneficiario del sistema:
+Acceder al aplicativo para reforzar el aprendizaje de inglés nivel A1.
+Usar el módulo de reconocimiento de imágenes con descripciones auditivas.
+Consultar el glosario con soporte de audio.
+Participar en micro-lecciones gamificadas como recurso adicional.
+
+Nivel de Educación Requerida
+Estudiante universitario de la Universidad de Cundinamarca.
+
+Experiencia Requerida
+No requiere experiencia previa en inglés avanzado; solo interés en aprender y reforzar vocabulario básico.
+
+Experiencia Técnica Requerida
+Manejo básico de dispositivos móviles.
+Conocimiento en el uso de lectores de pantalla (ej. Talkback).
+Familiaridad con accesibilidad en dispositivos móviles.
+
+
+Restricciones
+Compatibilidad de Plataforma: Desarrollado para ejecutarse en dispositivos móviles inteligentes con sistema operativo Android (versión 10 o superior).
+Conectividad a internet: La función de procesamiento de imágenes e inferencia con IA de visión por computador y síntesis de voz requiere una conexión activa de internet (4G/Wi-Fi).
+Accesibilidad Obligatoria: El diseño del software debe alinearse con los lineamientos WCAG 2.2 Nivel AA y garantizar compatibilidad con TalkBack.
+Proyección de Datos: El almacenamiento de datos de uso y progreso del estudiante se realiza en una base de datos en la nube cumpliendo con la Ley 1581 de 2012 de Colombia sobre protección de datos personales.
+Suposiciones y Dependencias
+Suposiciones:
+Se asume que los estudiantes con discapacidad visual participantes tienen acceso personal y constante a un dispositivo móvil inteligente (smartphone o tablet) que posea cámara funcional y este operativo con sistemas operativos recientes (Android 10+).
+Se asume que los usuarios tendrán acceso a una conexión a internet estable y con velocidad adecuada (mínimo 4G o Wi-Fi) la mayor parte del tiempo de uso para asegurar el funcionamiento óptimo del módulo de reconocimiento de imágenes en la nube.
+Se asume que el Administrador posee las competencias técnicas básicas para realizar la carga inicial, modificación del catálogo de vocabulario A1 (80 a 150 palabras) y la extracción de métricas de uso directamente a través de la consola de servicio en la nube (ej. Firebase) o archivos de configuración del sistema, sin requerir el desarrollo de una interfaz web de administración independiente para el MVP.
+Se asume que la Universidad de Cundinamarca (UDEC) brindará el apoyo logístico y el permiso formal para la ejecución del piloto y la recopilación de datos de los usuarios objetivo.
+
+Dependencias:
+Disponibilidad y Calidad de APIs: El requisito central (RF-03) depende directamente de la disponibilidad y el correcto funcionamiento de las APIs de Visión Artificial (ej. Google Cloud Visión) y los servicios de Síntesis de Voz (TTS). Una interrupción o degradación en la latencia o precisión de estas APIs de terceros impactará la funcionalidad del sistema.
+Política de Cosos de las APIs: La sostenibilidad económica del prototipo depende de la política de precios y de los límites gratuitos que ofrezca el proveedor de visión por computador en la nube. Como la síntesis de voz y la lectura de la interfaz funcionan localmente en el dispositivo, usando el motor nativo del sistema operativo, la única parte de la aplicación que depende de un servicio externo es el RF-03 (Reconocimiento e Identificación de objetos mediante IA). Si se agota la cuota gratuita de la API de visión artificial, solo se verá afectada la función de captura de objetos con la cámara. Sin embargo, el glosario A1, las micro-lecciones y la navegación por voz seguirán funcionando sin interrupciones.
+Regulaciones de Datos: El aplicativo depende del cumplimiento estricto de la Ley de Protección de Datos Personales (Ley 1581 de 2012) y las políticas de la UDEC, lo que podría imponer restricciones en el almacenamiento de información sensible de los estudiantes.
+Requisitos Futuros
+Expansión de vocabulario del nivel A1.
+Expansión a otros niveles de inglés (A2, B1).
+Inclusión de más contextos léxicos (cuidad, trabajo).
+Integración de un sistema más avanzado de gamificación.
+Mayor alcance de descripción de imágenes del entorno.
+Requisitos Específicos 
+Interfaces Externas
+Interfaz de Usuario
+La Interfaz de Usuario debe adherirse rigurosamente a los principios de diseño universal y a las pautas de accesibilidad para contenido web (WCAG 2.2 AA) para que exista una experiencia completa para los estudiantes con discapacidad visual.
+Interfaz de Hardware
+Es fundamental que se cuente con un dispositivo móvil que disponga de los siguientes componentes físicos para el funcionamiento del prototipo:
+Cámara posterior: Para la captura de imágenes empleada en la identificación de objetos del entorno.
+Altavoz o salida de auriculares: Para la salida auditiva de las descripciones, la reproducción de voz (TTS) y la retroalimentación sonora del sistema.
+Micrófono: Para la captura de audio en las búsquedas y consultas de vocabulario por voz dentro del aplicativo.
+
+
+La interfaz de Usuario (IU) debe ser plenamente compatible con el lector de pantalla nativo del sistema operativo objetivo (Talback en Android). Los elementos interactivos de la pantalla deben incluir etiquetas de accesibilidad semánticas que describan de manera explícita su función, contenido y estado.
+
+Interfaz de Software
+Se requiere la integración con una base de datos en la nube (Firebase o similar) para respaldar el almacenamiento, control y manipulación eficiente de la informática y la integración de las APIs Google Cloud Vision para el reconocimiento de imágenes y Text-to-Speech (TTS) para síntesis de voz.
+	El sistema debe poder acceder y controlar la cámara del dispositivo para la captura de imágenes en tiempo real. El acceso debe solicitarse explícitamente al usuario.
+	La aplicación debe dirigir la salida de audio de alta calidad (descripciones TTS, pronunciaciones) al altavoz interno o a auriculares, respetando la configuración de volumen del usuario.
+Funciones
+Requerimientos Funcionales
+Cantidad de requisitos
+#11
+
+
+Requerimiento
+RF-01
+
+Nombre del requerimiento
+Gestión de Usuarios y Roles
+
+Descripción
+El sistema debe:
+a) Permitir el auto-registro del Estudiante mediante el ingreso de su Nombre, Email y Contraseña.
+b) Permitir al Administrador gestionar las cuentas de los Estudiantes participantes en el piloto (consultar, modificar o desactivar accesos) y controlar los permisos de uso sobre los módulos del aplicativo (reconocimiento por IA, glosario A1, micro-lecciones gamificadas y métricas de progreso). 
+c) Permitir la autenticación (inicio de sesión) y el restablecimiento de contraseña para el rol de Estudiante.
+
+Roles
+Administrador, Estudiante
+
+
+Requerimiento
+RF-02
+
+Nombre del requerimiento
+Inicio de Sesión
+
+Descripción
+El sistema debe permitir que los usuarios registrados inicien sesión de manera segura mediante la autenticación de sus credenciales. Según el rol se deben encontrar y poder interactuar con las funcionalidades del aplicativo.
+
+Roles
+Estudiante
+
+
+Nota. JUSTIFICACIÓN UMBRAL 65%Origen técnico: Las APIs de visión por computador (API multimodal) retornan un índice de certeza numérico entre 0.0 y 1.0 (0% a 100%) para cada etiqueta detectada.
+Justificación pedagógica: En un contexto educativo para personas con discapacidad visual, un umbral bajo (≤50%) genera falsos positivos (identificar una silla como una mesa), lo cual induce al error en el aprendizaje de vocabulario. Un umbral demasiado alto (≥90%) vuelve la aplicación inflexible ante variaciones de luz o ángulo de la cámara.
+Sustento en el documento: En la tesis se justifica expresando que el umbral del 65% (0.65) fue establecido mediante pruebas empíricas de calibración técnica durante la etapa de prototipado (XP), garantizando un equilibrio óptimo entre precisión léxica y usabilidad en entornos reales.
+
+Requerimiento
+RF-03
+
+Nombre del requerimiento
+Reconocimiento e Identificación de objetos mediante IA
+
+Descripción
+a) Captura e Inferencia: Permitir al usuario capturar una imagen mediante la cámara del dispositivo móvil, enviándola a la API de visión por computador para su procesamiento.
+b) Filtro y Umbral de Confianza: Analizar la imagen exigiendo un umbral de confianza (confidence score) mínimo del 70% (0.7) para la detección del objeto.
+c) Mapeo a Vocabulario Controlado: Comparar y asociar la etiqueta obtenida contra la base de datos acotada del proyecto (catálogo controlado de 80 a 150 palabras de nivel A1 - MCER). 
+d) Formato de Salida: Generar la respuesta estructurada que contenga el término en inglés A1, su traducción al español y una frase de ejemplo, enviando dicha información a la pantalla y al canal de audio del sistema. 
+e) Control de Excepciones: Si el objeto no alcanza el umbral de confianza mínimo o la etiqueta no coincide con ninguna palabra del vocabulario controlado A1, el sistema debe emitir la respuesta: "Objeto no reconocido o no disponible en el glosario A1".
+
+
+Roles
+Estudiante
+
+
+Requerimiento
+RF-04
+
+Nombre del requerimiento
+Síntesis de Voz (TTS) y Salida Auditiva
+
+Descripción
+El sistema debe:
+a) Conversión Texto a Voz: Convertir en salida de audio accesible las descripciones de objetos, palabras del glosario, frases de ejemplo y elementos textuales de la interfaz mediante un motor de Síntesis de Voz (Text-to-Speech). 
+b) Idiomas de Salida: Soporta la reproducción sonora en idioma inglés para la pronunciación de vocabulario y frases de ejemplo, y en idioma español para las traducciones, descripciones e instrucciones de la interfaz. 
+c) Disparador de Audio: Iniciar la reproducción auditiva de forma automática tras la captura/procesamiento de datos o cuando el usuario seleccione un elemento interactivo en la pantalla.
+
+Roles
+Estudiante
+
+
+Requerimiento
+RF-05
+
+Nombre del requerimiento
+Retroalimentación Háptica (Vibración)
+
+Descripción
+El sistema debe:
+a) Confirmación por Vibración: Emitir señales hápticas (vibraciones del dispositivo) diferenciadas según el evento de la interfaz: un patrón corto para confirmación de selección/éxito, y un patrón doble o prolongado para errores o fallos en el reconocimiento. 
+b) Criterio de Aceptación: La respuesta de vibración debe ejecutarse de forma independiente del canal de audio, pudiendo probarse y validarse en modo silencioso durante las pruebas de usabilidad.
+
+
+Roles
+Estudiante
+
+
+Requerimiento
+RF-06
+
+Nombre del requerimiento
+CRUD Vocabulario
+
+Descripción
+El sistema debe permitir al Administrador agregar, modificar (traducción, pronunciación, frase ejemplo) y eliminar entradas de vocabulario en el Glosario A1.
+
+Roles
+Administrador
+
+
+Requerimiento
+RF-07
+
+Nombre del requerimiento
+Consulta y Reproducción de Vocabulario A1
+
+Descripción
+El sistema debe permitir al usuario buscar palabras del vocabulario A1 por voz o texto. Para cada palabra, debe mostrar su traducción, una definición sencilla, y ofrecer la opción de escuchar la pronunciación en inglés y una frase de ejemplo.
+El glosario debe contener entre 80-150 palabras esenciales del nivel A1 del MCER.
+
+Roles
+Estudiante
+
+
+Requerimiento
+RF-08
+
+Nombre del requerimiento
+Micro-lecciones Gamificadas y Retroalimentación Multimodal
+
+Descripción
+El sistema debe:
+a) Prácticas Auditivas: Ofrecer actividades breves e interactivas de práctica basadas en el canal auditivo (ej. identificación de vocabulario por audio, completado de frases). 
+b) Gamificación Accesible: Asignar una puntuación acumulativa y niveles de logro representados de forma multimodal: anunciados por salida de audio (síntesis de voz), en texto descriptivo accesible para lectores de pantalla y mediante patrones de vibración háptica. 
+c) Equivalencia Sonora de Progreso: Sustituir o complementar cualquier indicador gráfico (como barras o medallas) con resúmenes auditivos explícitos del estado de avance (ej. "Has completado 3 de 5 ejercicios de la lección") y alertas sonoras diferenciadas al alcanzar un hito.
+
+
+Roles
+Estudiante
+
+
+Requerimiento
+RF-09
+
+Nombre del requerimiento
+Evaluación y Seguimiento de Progreso
+
+Descripción
+El sistema debe:
+a) Registro de Interacciones: Almacenar automáticamente los datos cuantitativos de uso durante las sesiones, limitándose a eventos observables del sistema: cantidad de palabras consultadas en el glosario, micro-lecciones iniciadas y completadas, recuento de respuestas acertadas y fallidas en las prácticas, y duración/frecuencia de las sesiones. 
+b) Reporte de Métricas de Uso: Presentar el resumen acumulado de interacciones en formato de texto accesible y ejecutable por salida de voz para el estudiante, y permitir al administrador consultar o exportar estos registros consolidados para el análisis descriptivo del piloto. 
+
+
+Roles
+Estudiante, Administrador
+
+
+Requerimiento
+RF-10
+
+Nombre del requerimiento
+Compatibilidad con Lectores de Pantalla
+
+Descripción
+El sistema debe interactuar correctamente con los lectores de pantalla del sistema operativo (TalkBack en Android), asegurando que todos los elementos (botones, etiquetas, contenido textual) sean anunciados de forma clara y lógica.
+
+Roles
+Estudiante
+
+
+Requerimiento
+RF-11
+
+Nombre del requerimiento
+Consulta Léxica Interactiva por Voz con IA (Tutor Bilingüe)
+
+Descripción
+El sistema debe:
+
+a) Captura por Voz: Permitir al estudiante formular preguntas en lenguaje natural oral mediante el micrófono del dispositivo (usando reconocimiento de voz nativo Speech-to-Text) o mediante un campo de entrada accesible (ej. "¿Cómo se dice lápiz en inglés?").
+b) Delimitación Estricta a Palabras Aisladas: Procesar la consulta mediante la API multimodal de inteligencia artificial, restringiendo la traducción exclusivamente a términos o palabras individuales. El sistema no traducirá oraciones compuestas, párrafos ni frases largas, con el fin de enfocar la carga cognitiva en la adquisición léxica de nivel A1.
+c) Formato de Salida Didáctico: Generar una respuesta estructurada que contenga: (1) el término traducido al inglés, (2) una oración corta de ejemplo de uso en inglés (nivel A1), y (3) la traducción de dicha oración al español.
+
+d) Salida Multimodal Accesible: Presentar el resultado en pantalla mediante una tarjeta accesible de diálogo y activar de forma inmediata la locución secuencial por voz a través del motor TTS local (con pronunciación diferenciada en español e inglés).
+
+e) Control de Excepciones: Si el usuario ingresa una frase compleja, un texto extenso o una solicitud que exceda una palabra individual, el sistema debe emitir la respuesta sonoro-textual de contingencia: "Por favor consulta únicamente una palabra a la vez para tu práctica de vocabulario".
+
+Roles
+Estudiante
+
+
+Requerimientos No Funcionales
+Requerimiento
+RNF-01
+
+Nombre del requerimiento
+Accesibilidad (WCAG AA)
+
+Descripción
+La interfaz gráfica, la navegación táctil y la arquitectura semántica del aplicativo deben concebirse para ser percibidas, operadas y comprendidas de forma autónoma por personas con discapacidad visual (baja visión y ceguera total), integrándose de manera nativa con tecnologías de asistencia móviles y proporcionando alternativas perceptibles para cada elemento interactivo.
+
+Criterio de Aceptación Verificable
+El 100% de los elementos interactivos (botones, campos de entrada, tarjetas del glosario) cuentan con nodos de accesibilidad definidos (Semantics), comprobable mediante auditoría con TalkBack sin arrojar etiquetas nulas, genéricas o elementos interactivos mudos.
+La relación de contraste cromático entre el texto y su fondo es igual o superior a 4.5:1 para texto regular y 3:1 para texto grande o elementos gráficos esenciales, validado con una herramienta de inspección de contraste WCAG.
+El área mínima de pulsación para cualquier control táctil es de al menos 48×48 dp (píxeles independientes de densidad).
+
+
+
+Requerimiento
+RNF-02
+
+Nombre del requerimiento
+Disponibilidad y Modo de Operación Híbrido
+
+Descripción
+El software debe desacoplar las funcionalidades pedagógicas esenciales de la conectividad a internet, asegurando que la consulta de términos, la síntesis fonética y las prácticas de estudio permanezcan disponibles localmente en el dispositivo ante caídas de red o zonas con cobertura limitada dentro del campus universitario.
+
+Criterio de Aceptación Verificable
+Con el dispositivo en modo avión (sin datos móviles ni Wi-Fi), el usuario puede abrir el glosario, buscar términos del catálogo base de 102 palabras, escuchar la pronunciación por voz y completar las microlecciones gamificadas sin bloqueos ni cierres inesperados (crashes).
+Si el usuario intenta capturar una fotografía en el módulo de visión sin conexión a internet, el sistema no congela la aplicación y emite una notificación accesible multimodal (texto visible en pantalla y mensaje por voz mediante TTS: "Se requiere conexión a internet para analizar la imagen") en un tiempo menor a 1.0 segundo tras el intento de envío.
+
+
+
+Requerimiento
+RNF-03
+
+Nombre del requerimiento
+Seguridad y Protección de Datos Personales (Ley 1581 de 2012)
+
+Descripción
+El aplicativo debe resguardar la identidad, credenciales y registros de actividad de los estudiantes participantes, implementando mecanismos de comunicación cifrada y evitando el almacenamiento indebido o la exposición de información sensible o biométrica en servicios públicos.
+
+Criterio de Aceptación Verificable
+Todo intercambio de información entre la aplicación móvil, los servicios de autenticación y la base de datos en la nube se realiza exclusivamente mediante canales seguros HTTPS con protocolo TLS 1.2 o superior.
+Las fotografías capturadas para inferencia se procesan como un flujo temporal de bytes y no son almacenadas de forma persistente en servidores públicos ni asociadas a identificadores personales del estudiante.
+El repositorio del proyecto carece de credenciales de administración, llaves de API privadas o secretos de infraestructura embebidos en el código fuente rastreado, comprobable mediante escaneo estático automatizado de seguridad sin alertas abiertas.
+
+
+
+Requerimiento
+RNF-04
+
+Nombre del requerimiento
+Usabilidad Percibida y Facilidad de Uso
+
+Descripción
+La estructura de navegación, la consistencia de las respuestas del sistema y la curva de aprendizaje de la aplicación deben brindar una experiencia comprensible, predecible y satisfactoria para estudiantes con compromiso visual.
+
+Criterio de Aceptación Verificable
+El prototipo obtiene una puntuación promedio igual o superior a 70 puntos en la Escala de Usabilidad del Sistema (SUS) durante las pruebas de validación con los usuarios objetivo.
+La tasa de finalización autónoma de tareas clave (Task Completion Rate) —como consultar un término en el glosario, capturar una foto para análisis y resolver un ejercicio auditivo— es igual o superior al 85% durante las sesiones de prueba con TalkBack sin requerir intervención presencial del evaluador.
+
+
+
+Requerimiento
+RNF-05
+
+Nombre del requerimiento
+Mantenibilidad y Modularidad del Código
+
+Descripción
+La arquitectura de software debe organizarse bajo una separación estricta de responsabilidades (capas de presentación, lógica y fuentes de datos), facilitando la actualización de las dependencias, la incorporación de nuevas palabras al glosario y la sustitución de servicios externos sin comprometer la estabilidad del sistema.
+
+Criterio de Aceptación Verificable
+La capa de interfaz gráfica no contiene llamadas directas a APIs de red ni manipulación directa de bases de datos; los servicios de visión artificial, síntesis de voz (flutter_tts) y persistencia operan como módulos independientes inyectados o referenciados a través de controladores o repositorios.
+El análisis estático de código mediante SonarQube / SonarCloud reporta una calificación de mantenibilidad de grado "A", cero vulnerabilidades de seguridad abiertas y un índice de código duplicado inferior al 5%.
+
+
+Requerimiento
+RNF-06
+
+Nombre del requerimiento
+Compatibilidad de Plataforma y Adaptabilidad Móvil
+
+Descripción
+El prototipo debe construirse para garantizar una ejecución estable y un renderizado adecuado en el ecosistema de hardware móvil Android utilizado por los estudiantes de la universidad, evitando dependencias de componentes exclusivos de marcas específicas.
+
+Criterio de Aceptación Verificable
+La aplicación se instala y ejecuta sin errores fatales en dispositivos con sistema operativo Android 10 (API level 29) hasta versiones vigentes de Android.
+La interfaz gráfica se adapta dinámicamente a resoluciones de pantalla estándar (relaciones de aspecto 16:9, 18:9 y 20:9) sin provocar desbordamientos de renderizado (overflow errors visuales o semánticos) al incrementar el tamaño de fuente del sistema operativo hasta el 130%.
+
+
+Requisitos de Rendimiento
+El rendimiento del aplicativo móvil constituye un factor crítico de calidad para asegurar la fluidez, autonomía y estabilidad durante la interacción de estudiantes con discapacidad visual. Debido a que los usuarios dependen primordialmente de canales no visuales —especialmente la síntesis de voz, los comandos auditivos y la retroalimentación táctil—, cualquier demora o bloqueo imprevisto incrementa la carga cognitiva y genera desorientación en la navegación. Por esta razón, los parámetros de rendimiento del prototipo se definieron con base en umbrales empíricos medibles, ajustados a las condiciones reales de conectividad y al hardware móvil disponible en la comunidad universitaria.
+En lo relativo a la disponibilidad del sistema, se delimitó su evaluación de manera estricta durante las cuatro semanas programadas para las pruebas piloto con la población objetivo. Considerando que la arquitectura desacopla el núcleo pedagógico de los servicios externos, el aplicativo garantiza una disponibilidad local del 100% para la consulta del catálogo base de 102 palabras, la reproducción sonora de ejemplos y las actividades gamificadas, al ejecutarse de manera autónoma en el dispositivo mediante el motor TTS nativo. Por su parte, la disponibilidad de los servicios en la nube (autenticación en Firebase y consumo de la API multimodal para el reconocimiento visual) se supedita a los acuerdos de nivel de servicio de los proveedores y a la estabilidad de la red local, estableciendo como meta una tasa de éxito igual o superior al 95% en las solicitudes cursadas durante las franjas horarias destinadas a las sesiones de validación académica.
+La latencia en el procesamiento de visión artificial se calibró para brindar una respuesta ágil sin saturar el canal sensorial del estudiante. Desde el instante en que el usuario activa la captura fotográfica puntual hasta que el servicio multimodal procesa la imagen, filtra la etiqueta frente al vocabulario A1 y activa la respuesta de voz bilingüe, el tiempo total de respuesta no debe exceder los 5.0 segundos bajo condiciones estándar de red móvil (4G o Wi-Fi con velocidad mínima de 5 Mbps). Asimismo, para evitar la sensación de congelamiento de la interfaz, el sistema emite una confirmación auditiva inmediata dentro de los primeros 400 milisegundos tras la captura, informando al usuario que la imagen se encuentra en proceso de análisis. En contraste, la síntesis de voz local para la lectura de la interfaz y la pronunciación del glosario opera con un retardo máximo de 300 milisegundos tras el evento táctil, asegurando una interacción fluida con el lector TalkBack.
+Respecto a la capacidad del sistema, la concurrencia se dimensionó a partir del universo real de participantes de la investigación, el cual comprende a los siete estudiantes identificados en la sede Facatativá y al grupo piloto complementario. La infraestructura del prototipo se diseñó para sostener entre 10 y 15 sesiones activas simultáneas sin presentar degradación en la persistencia de datos en Firestore ni sobrepasar las cuotas de procesamiento por minuto de la capa gratuita de la API de inteligencia artificial. Esta capacidad responde directamente a las dinámicas de los talleres presenciales guiados, evitando el sobredimensionamiento de la arquitectura o la asunción de costos innecesarios en la nube.
+
+Restricciones de Diseño
+Las decisiones de diseño y la arquitectura de software del prototipo se encuentran delimitadas por requerimientos de compatibilidad técnica, estándares internacionales de accesibilidad digital y criterios de ingeniería orientados a la mantenibilidad del sistema. En primer lugar, la plataforma objetivo se restringe a dispositivos móviles inteligentes con sistema operativo Android en su versión 10.0 (nivel de API 29) o superior, implementándose mediante el framework Flutter con el fin de aprovechar una base de código modular y garantizar la integración directa con los canales de accesibilidad nativos del sistema operativo.
+En el ámbito de la interacción, la interfaz de usuario y la experiencia de navegación deben ceñirse estrictamente a las Pautas de Accesibilidad para el Contenido Web (WCAG 2.2) en su nivel de conformidad AA, adaptadas a entornos móviles. Esta restricción exige que cada componente gráfico cuente con nodos semánticos explícitos compatibles con el lector de pantalla TalkBack, garantizando una exploración gestual lineal sin bloqueos, relaciones de contraste cromático superiores a 4.5:1 para usuarios con baja visión y áreas de pulsación táctil no inferiores a 48 por 48 píxeles de densidad.
+En cuanto a la organización interna del código, se adopta un esquema de arquitectura limpia con separación modular en capas de presentación, lógica de negocio y fuentes de datos. Esta decisión aísla el comportamiento de la interfaz frente a los proveedores de infraestructura, asegurando que la incorporación futura de nuevos módulos o la ampliación del inventario léxico hacia niveles superiores (A2 o B1) no demande una reestructuración del núcleo del aplicativo.
+Por último, la integración de capacidades inteligentes se restringe al consumo de servicios externos mediante una API multimodal en la nube para el análisis fotográfico, combinada con el motor nativo de síntesis de voz del dispositivo para la salida de audio local. Para hacer verificable el comportamiento de la visión artificial y dar respuesta rigurosa a las condiciones de prueba, se establece como criterio de aceptación técnico alcanzar una tasa mínima de aciertos (precisión) del 75% en la clasificación de objetos sobre un conjunto de evaluación de 50 fotografías que representen las cuatro categorías del prototipo (útiles escolares, tecnología, objetos personales y alimentos), evaluadas bajo condiciones de iluminación natural y artificial en el campus universitario y manteniendo activo el umbral de certeza interno del 70% (0.70) para la confirmación de cada término.
+
+Atributos del Sistema
+Los atributos del sistema sintetizan las características de calidad, seguridad, robustez y facilidad de mantenimiento que guían la implementación de AIr Sight, asegurando que el prototipo satisfaga las demandas operativas y sensoriales de los estudiantes sin comprometer la estabilidad del software.
+En lo concerniente a la accesibilidad e interoperabilidad asistiva, el aplicativo descarta generalizaciones técnicas y acota su compatibilidad al entorno operativo de Android 10.0 (API 29) en adelante, interactuando con el conjunto de herramientas de accesibilidad de Google (Android Accessibility Suite con TalkBack versión 12.0 o superior). Para garantizar una experiencia predecible en hardware real, el sistema se somete a validación en dispositivos físicos de gama media habituales entre la población universitaria (marcas como Xiaomi, Samsung y Motorola). El criterio de aceptación técnico exige que todos los componentes interactivos —incluyendo botones de acción, campos de texto, tarjetas léxicas y controles de reproducción— cuenten con nodos de accesibilidad semántica explícitos (Semantics), definiendo su etiqueta textual, tipo de control y estado de activación sin generar trampas de foco ni lecturas redundantes en el árbol semántico del lector de pantalla. Complementariamente, se incorpora un subsistema de retroalimentación háptica calibrado con patrones de vibración diferenciados que confirman de manera táctil el éxito de una captura, la transición entre pantallas o la ocurrencia de un error, funcionando con total independencia del canal de audio.
+La seguridad y protección de la información se fundamenta en el resguardo integral de la identidad y las interacciones de los participantes, en estricto apego a la Ley Estatutaria 1581 de 2012 sobre protección de datos personales en Colombia y las directrices éticas de la Universidad de Cundinamarca. Todo intercambio de datos entre el cliente móvil, los servicios de autenticación de Firebase y la API multimodal en la nube se ejecuta obligatoriamente mediante canales seguros cifrados bajo protocolos HTTPS y TLS 1.2 o superior. Asimismo, para salvaguardar la privacidad visual y el anonimato de los estudiantes, las fotografías capturadas durante las consultas léxicas se procesan temporalmente en la memoria volátil del dispositivo como un flujo de bytes (stream) con destino exclusivo a la inferencia del modelo, garantizando que ninguna imagen del entorno privado del estudiante quede almacenada permanentemente en servidores externos ni asociada a identificadores de usuario en la base de datos.
+La usabilidad y la experiencia de usuario se orientan a ofrecer una curva de aprendizaje mínima y una interacción libre de fricciones cognitivas. El diseño prescinde de jerarquías complejas de menús y prioriza una estructura de navegación lineal que permite acceder a las tres funciones principales del prototipo —el reconocimiento de objetos con la cámara, la consulta en el glosario bilingüe y las microlecciones gamificadas— mediante gestos táctiles estándar y comandos de voz sencillos. La efectividad de este atributo se verifica empíricamente a través de pruebas de usabilidad guiadas con los estudiantes con baja visión y ceguera total de la institución, exigiendo como umbral de cumplimiento alcanzar una tasa de éxito autónomo en tareas clave de al menos el 85% y una calificación promedio igual o superior a 70 puntos en la Escala de Usabilidad del Sistema (SUS).
+Por último, la mantenibilidad y la calidad del código se aseguran mediante una arquitectura limpia y modular con separación estricta de capas, aislando los servicios de visión artificial, síntesis de voz (flutter_tts) y persistencia local de la capa de presentación en Flutter. El código fuente incorpora documentación técnica para sus clases y controladores, siguiendo los estándares oficiales de estilo de Dart. Para certificar la sostenibilidad del proyecto y facilitar una eventual transferencia tecnológica al programa de Ingeniería de Sistemas de la universidad, el repositorio se audita mediante análisis estático continuo en SonarCloud, estableciendo como umbral de calidad la obtención de un grado de mantenibilidad "A", un índice de código duplicado inferior al 5% y la ausencia total de vulnerabilidades de seguridad abiertas en la rama principal de desarrollo.
+
+Otros Requisitos
+Documentación técnica y de usuario: El prototipo se entrega con dos recursos documentales complementarios. En primer lugar, un Manual Técnico que detalla la arquitectura limpia del software, los diagramas de componentes, la configuración de dependencias en Flutter, la integración con Firebase y el consumo de la API multimodal. En segundo lugar, un Manual de Usuario Accesible, estructurado bajo lineamientos de accesibilidad digital para ser interpretado con fluidez por lectores de pantalla (TalkBack), donde se explican paso a paso las rutas de navegación lineal, los comandos de voz y la configuración de la retroalimentación auditiva y háptica.
+Titularidad, propiedad intelectual y licenciamiento: Con base en la legislación colombiana sobre derechos de autor (Ley 23 de 1982 y Ley 1915 de 2018), la totalidad de los derechos morales y patrimoniales sobre el código fuente, la arquitectura de software, los modelos de datos y los diseños de interfaz pertenecen de manera exclusiva a la autora del proyecto. El software no se publica bajo licencias de código abierto (Open Source) ni contempla la cesión de derechos de explotación comercial, modificación o escalamiento a la universidad ni a terceros, reservándose la potestad de su registro de soporte lógico ante la Dirección Nacional de Derecho de Autor (DNDA) para futuros desarrollos independientes. La Universidad de Cundinamarca recibe únicamente una autorización no exclusiva para el archivo, conservación y consulta con fines netamente académicos del documento de grado en su repositorio institucional.
+Cumplimiento ético e institucional: El proyecto se acoge a las directrices de investigación y de inclusión educativa de la institución, garantizando el respeto por los derechos de los participantes con discapacidad visual mediante la aplicación rigurosa de consentimientos informados. En concordancia con la Ley Estatutaria 1581 de 2012 de Colombia, el sistema restringe el registro de datos a eventos anónimos de uso y tiempos de respuesta, sin recopilar información sensible, identificadores personales ni almacenar de forma persistente las fotografías capturadas durante las pruebas.
+
+Apéndices
+APÉNDICE A: EVOLUCIÓN ADAPTATIVA Y CONTROL DE CAMBIOS DE REQUISITOS
+Dado que el desarrollo del aplicativo se enmarca en la integración de Design Thinking (diseño centrado en el usuario) y Extreme Programming (XP, desarrollo ágil e incremental), la especificación de requisitos no se concibe como un artefacto estático, sino como un instrumento dinámico sujeto a refinamiento continuo.
+
+Durante el ciclo de vida del proyecto, se realizaron revisiones sistemáticas para eliminar ambigüedades, desacoplar requisitos complejos, acotar el alcance hacia un Producto Mínimo Viable (MVP) técnicamente ejecutable y asegurar la alineación con los estándares WCAG 2.2 (nivel AA) y el lector de pantalla TalkBack. A continuación, se presenta la matriz de trazabilidad y control de versiones que justifica técnicamente cada ajuste realizado sobre la especificación original.
+
+Tabla A.1: Historial de Revisiones y Trazabilidad de Requisitos (SRS)
+Versión
+Fecha
+Requisito / Sección Afectada
+Descripción del Cambio
+Justificación Técnica y de Inclusión
+
+v1.0
+2025/10
+Estructura General SRS
+Definición inicial de requisitos bajo modelo Cascada/Scrum. Incluía rol docente, panel web independiente, soporte para iOS/VoiceOver e indicadores no medibles.
+Versión inicial del anteproyecto de grado.
+
+v1.1
+2026/03
+Alcance y Metodología
+Transición a Design Thinking + XP. Acotamiento del glosario a un rango de 80 a 150 palabras (fijando un corpus base de 102 términos esenciales) y supresión del rol docente/panel web independiente.
+Mitigación del riesgo de aumento descontrolado del alcance (scope creep). Enfoque exclusivo en el estudiante con discapacidad visual como usuario final del MVP y gestión administrativa simplificada mediante Firebase.
+
+v1.2
+2026/08
+Restricciones y Plataforma
+Delimitación al sistema operativo Android (versión 10+) y al lector TalkBack. Eliminación de referencias a iOS y VoiceOver.
+Ajuste a la disponibilidad real de dispositivos móviles identificada en la muestra de estudiantes de la UDEC Facatativá y coherencia técnica en la arquitectura.
+
+v1.3
+2026/09
+RF-03 (Visión por IA)
+Definición formal del umbral de confianza mínimo (≥70% / 0.70), estructura del formato de salida y mensaje sonoro de contingencia.
+Eliminación de ambigüedades técnicas. El umbral del 70% previene falsos positivos en el aprendizaje léxico y estandariza la retroalimentación ante objetos no reconocidos.
+
+v1.4
+2026/09
+RF-04 y RF-05 (Audio y Háptica)
+Desacople de la síntesis de voz (RF-04) y la respuesta háptica por vibración (RF-05) en dos requerimientos atómicos independientes.
+Cumplimiento del principio de atomicidad del estándar IEEE 830, permitiendo auditar y probar la respuesta por vibración de forma aislada al canal de audio.
+
+v1.5
+2026/09
+RF-09 (Métricas de Uso y Progreso)
+Sustitución del concepto "palabras aprendidas" por el registro de variables operativas observables (consultas al glosario, ejercicios completados, aciertos).
+Supresión de inferencias cognitivas no verificables por software. La evaluación formativa se delega a las pruebas descriptivas pretest-postest del estudio.
+
+v1.6
+2026/09
+3.1.2 Interfaces de Hardware
+Inclusión explícita del micrófono del dispositivo como interfaz física obligatoria.
+Corrección de inconsistencia funcional en la arquitectura; el micrófono es indispensable para el módulo de búsqueda y consulta de vocabulario por voz.
+
+v1.7
+2026/10
+RF-11 y Apéndice B
+Incorporación formal del módulo de consulta léxica por voz con IA (RF-11), delimitando su alcance exclusivamente a palabras individuales.
+Reduce la fatiga de navegación en lectores de pantalla (TalkBack) al permitir consultas orales directas, manteniendo el foco cognitivo en vocabulario A1 y evitando el uso del sistema como traductor general de frases.
+
+
+APÉNDICE B: EVOLUCIÓN ARQUITECTÓNICA, INCORPORACIÓN DEL MÓDULO DE TUTORÍA POR VOZ Y JUSTIFICACIÓN TÉCNICA DEL MODELO MULTIMODAL
+B.1. Propósito de la Enmienda
+El presente apéndice formaliza dos hitos arquitectónicos en el desarrollo del prototipo móvil Air Sight:
+Sustitución del motor de visión: La transición técnica del servicio tradicional Google Cloud Vision API hacia el modelo multimodal Gemini Flash gestionado mediante Google AI Studio, optimizando la viabilidad económica y unificando la inferencia visual con la contextualización pedagógica. 
+Incorporación formal del nuevo módulo de consulta por voz (RF-11): La integración de un asistente interactivo de tutoría léxica que permite al estudiante resolver dudas espontáneas de vocabulario mediante preguntas formuladas en lenguaje natural a través del micrófono. 
+B.2. Justificación Técnica y Pedagógica de la Evolución
+Unificación de la inferencia multimodal: La arquitectura previa con Cloud Vision requería desacoplar la detección visual de la traducción didáctica en el cliente, entregando etiquetas aisladas en inglés (ej. fruit, produce) sin correlación con el nivel A1. Gemini Flash realiza en una sola llamada (one-shot inference) el reconocimiento del objeto, el filtrado contra el catálogo y la contextualización bilingüe. 
+Aparición e integración del Módulo de Consulta Léxica por Voz (RF-11): Durante el proceso de diseño centrado en el usuario (Design Thinking), se identificó que obligar al estudiante con discapacidad visual a navegar linealmente todo el árbol de pantallas del glosario cada vez que necesita saber una palabra genera fatiga de exploración. El modelo fundacional permite habilitar un módulo conversacional donde el usuario pregunta directamente por voz y recibe una respuesta estructurada con audio bilingüe instantáneo.
+Delimitación pedagógica (Palabras vs. Frases): Para mantener la coherencia con el nivel A1 del MCER y evitar que el aplicativo sea percibido o utilizado como un traductor general de textos, el módulo de tutoría por voz se delimitó estrictamente al procesamiento de palabras individuales. Esto reduce la sobrecarga cognitiva en el estudiante y asegura que los ejemplos generados permanezcan dentro de estructuras gramaticales elementales de nivel inicial.
+Optimización de latencia en tecnologías de asistencia: Gemini Flash ofrece tiempos de respuesta en servidor entre 600 ms y 1.2 segundos, permitiendo una latencia acumulada total en el teléfono inferior a los 4.0 segundos, cumpliendo con los lineamientos de fluidez operativa exigidos por la norma WCAG 2.2 AA. 
+Sostenibilidad económica y viabilidad académica: La capa gratuita de Google AI Studio opera sin requerir tarjetas de crédito ni generar cargos imprevistos por cuotas, garantizando la continuidad técnica del proyecto dentro de un marco de investigación universitaria. 
+
+B.3. Matriz Comparativa de Enfoques Arquitectónicos
+Criterio de Evaluación
+Arquitectura Inicial (Cloud Vision API) MD
+Arquitectura Adoptada (Gemini Flash - AI Studio) MD
+
+Paradigma
+Clasificación probabilística por etiquetas fijas (Labels). 
+Comprensión multimodal contextual (MLLM). 
+
+Traducción y contextualización
+Requiere servicios adicionales o procesamiento manual en cliente. 
+Integrada nativamente en la misma inferencia. 
+
+Módulo de consulta interactiva por voz
+No soportado nativamente (limitado a coincidencias exactas de texto). 
+Soportado mediante procesamiento de lenguaje natural (NLP) delimitado a términos léxicos. 
+
+Control de nivel léxico (A1)
+Algoritmos de filtrado manual dependientes de listas estáticas. 
+Instrucción del sistema (System Prompt) vinculada a pautas de nivel A1. 
+
+Costos y facturación
+Facturación por peticiones; tarjeta de crédito obligatoria. 
+Cupo gratuito permanente sin tarjeta de crédito en Google AI Studio. 
+
+
+B.4. Diferenciación de Alcance Operativo entre Módulos
+Módulo de Visión Artificial (Cámara - RF-03): Su alcance opera bajo un catálogo cerrado. La inferencia se restringe exclusivamente al inventario de vocabulario A1 del glosario (útiles de estudio, tecnología, objetos personales y alimentos). Ante objetos ajenos o fotos borrosas, emite la excepción sonora: "Objeto no reconocido o no disponible en el glosario A1". 
+Módulo de Consulta Léxica por Voz (Tutor con IA - RF-11): Su alcance léxico es abierto para palabras, pero cerrado para frases. El estudiante puede consultar cualquier palabra en español que desee conocer en inglés, pero el modelo tiene la instrucción estricta de traducir exclusivamente términos individuales. Si el usuario dicta oraciones completas, el sistema rechaza la solicitud pidiéndole consultar una sola palabra.
+
+B.5. Configuración de Salvaguarda y Mitigación de Alucinaciones
+Para evitar discrepancias pedagógicas o respuestas extensas no asimilables por TalkBack, se definen las siguientes instrucciones de sistema (System Instructions): 
+1. Directriz para el Módulo de Cámara (Inferencia Visual - RF-03)
+SYSTEM INSTRUCTION:
+Eres el clasificador visual del proyecto accesible Air Sight. Tu tarea es identificar el objeto principal en la imagen y asociarlo exclusivamente al vocabulario básico en inglés de nivel A1 (útiles escolares, tecnología, objetos personales o alimentos).
+ 
+
+Reglas:
+1. Si el objeto pertenece al vocabulario A1 cotidiano, responde ÚNICAMENTE en este formato JSON:
+{
+  "exito": true,
+  "palabraIngles": "chair",
+  "traduccionEspanol": "silla",
+  "fraseIngles": "The chair is wooden.",
+  "fraseEspanol": "La silla es de madera."
+}
+ 
+
+2. Si la imagen es borrosa, ambigua o el objeto NO pertenece al catálogo básico A1, responde ÚNICAMENTE:
+{
+  "exito": false,
+  "mensaje": "Objeto no reconocido o no disponible en el glosario A1"
+}
+ 
+
+2. Directriz para la Consulta Léxica por Voz (Tutor Bilingüe - RF-11)
+SYSTEM INSTRUCTION:
+Eres el tutor lingüístico accesible de Air Sight para estudiantes universitarios con discapacidad visual. El usuario te preguntará en lenguaje natural cómo se dice una palabra en inglés (ej. "¿Cómo se dice cuaderno?").
+ 
+
+Reglas estrictas de respuesta:
+1. Traduce ÚNICAMENTE palabras o términos individuales. 
+2. Si el usuario te pregunta por una frase compleja, un párrafo o una oración completa (ej. "¿Cómo se dice 'yo quiero ir a la casa de mi amigo'?"), responde ÚNICAMENTE:
+{
+  "exito": false,
+  "mensaje": "Por favor consulta únicamente una palabra a la vez para tu práctica de vocabulario."
+}
+ 
+3. Si la consulta corresponde a una palabra individual, genera siempre una oración de ejemplo sencilla (nivel A1) y responde ÚNICAMENTE en este formato JSON:
+{
+  "exito": true,
+  "terminoConsultado": "lápiz",
+  "traduccionIngles": "pencil",
+  "fraseEjemploIngles": "I write with my pencil.",
+  "fraseEjemploEspanol": "Yo escribo con mi lápiz.",
+  "respuestaHablada": "Lápiz se dice pencil. Por ejemplo: I write with my pencil, que significa: Yo escribo con mi lápiz."
+}
+ 
+
+B.6. Declaración de Cumplimiento Normativo y Privacidad de Datos
+La arquitectura implementada se apega a la Ley Estatutaria 1581 de 2012 de Colombia. Ninguna muestra de audio ni captura de imagen es almacenada permanentemente en la nube ni utilizada para reentrenamiento de modelos; su procesamiento ocurre únicamente en memoria volátil durante la sesión activa. 
+
